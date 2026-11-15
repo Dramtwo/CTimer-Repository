@@ -263,6 +263,9 @@ aapt dump badging app-debug.apk | grep -E "^package|application-label:"
 
 ## 八、版本历史
 
+> 详细的逐版更新公告见 [CHANGELOG.md](CHANGELOG.md)。
+
+
 | 版本 | 主要内容 |
 |---|---|
 | 1.0 – 1.9 | 基础计时、多列表、成绩差值、总评页、公式速记、卡片拖动、悬浮成绩菜单、配色改淡蓝奶白、几何图标体系 |
