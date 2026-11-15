@@ -10,6 +10,8 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandHorizontally
 import androidx.compose.animation.fadeIn
@@ -309,34 +311,23 @@ fun TimerScreen(vm: TimerViewModel = viewModel()) {
             }
         }
 
-        Row(modifier = Modifier.fillMaxSize()) {
-            // 左侧竖直侧栏：各页面常驻
-            AnimatedVisibility(
-                visible = !isRunning,
-                enter = fadeIn() + expandHorizontally(),
-                exit = fadeOut() + shrinkHorizontally()
-            ) {
-                DrawerSideBar(
-                    onOpen = { vm.openDrawer() },
-                    onOpenSummary = { vm.toggleSummaryPage() },
-                    onOpenFormula = { vm.toggleFormulaPage() },
-                    onOpenLeaderboard = { vm.toggleLeaderboardPage() },
-                    onResetCards = { vm.resetCardOffsets() },
-                    onImport = { launchImport() },
-                    onOpenSettings = { vm.toggleSettingsPage() },
-                    onOpenUser = { vm.toggleUserPage() }
-                )
-            }
-
-            // 内容区整块切换页面（新页面，而非叠加覆盖）
-            AnimatedContent(
-                targetState = page,
-                transitionSpec = { fadeIn() togetherWith fadeOut() },
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxHeight(),
-                label = "page"
-            ) { p ->
+        // 内容区整块切换页面：新页面从侧栏这一侧「释放」滑入
+        val sidePad by animateDpAsState(
+            targetValue = if (isRunning) 0.dp else 56.dp,
+            animationSpec = tween(220),
+            label = "sidePad"
+        )
+        AnimatedContent(
+            targetState = page,
+            transitionSpec = {
+                (slideInHorizontally(animationSpec = tween(300)) { -it / 2 } + fadeIn(tween(180)))
+                    .togetherWith(slideOutHorizontally(animationSpec = tween(220)) { it / 4 } + fadeOut(tween(100)))
+            },
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(start = sidePad),
+            label = "page"
+        ) { p ->
                 when (p) {
                     AppPage.NORMAL -> NormalPage(
                         vm = vm,
@@ -405,7 +396,27 @@ fun TimerScreen(vm: TimerViewModel = viewModel()) {
                         onBack = { vm.closeSettingsPage() }
                     )
                 }
-            }
+        }
+
+        // 侧栏常驻最上层：抽屉从它背后被「拉开」，而不是盖在它身上
+        AnimatedVisibility(
+            visible = !isRunning,
+            enter = fadeIn() + expandHorizontally(animationSpec = tween(220)),
+            exit = fadeOut() + shrinkHorizontally(animationSpec = tween(220)),
+            modifier = Modifier
+                .align(Alignment.CenterStart)
+                .zIndex(2f)
+        ) {
+            DrawerSideBar(
+                onOpen = { vm.openDrawer() },
+                onOpenSummary = { vm.toggleSummaryPage() },
+                onOpenFormula = { vm.toggleFormulaPage() },
+                onOpenLeaderboard = { vm.toggleLeaderboardPage() },
+                onResetCards = { vm.resetCardOffsets() },
+                onImport = { launchImport() },
+                onOpenSettings = { vm.toggleSettingsPage() },
+                onOpenUser = { vm.toggleUserPage() }
+            )
         }
 
         // 悬浮菜单（拖动呼出）
@@ -416,6 +427,7 @@ fun TimerScreen(vm: TimerViewModel = viewModel()) {
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .padding(bottom = 36.dp)
+                .zIndex(3f)
         ) {
             val browsed = vm.browsedSolve()
             val idx = vm.browseIndex ?: 0
@@ -431,11 +443,12 @@ fun TimerScreen(vm: TimerViewModel = viewModel()) {
             )
         }
 
-        // 抽屉遮罩
+        // 抽屉遮罩（只压暗内容区，侧栏本身在最上层不受影响）
         AnimatedVisibility(
             visible = drawerOpen,
             enter = fadeIn(),
-            exit = fadeOut()
+            exit = fadeOut(),
+            modifier = Modifier.zIndex(1f)
         ) {
             Box(
                 modifier = Modifier
@@ -450,12 +463,15 @@ fun TimerScreen(vm: TimerViewModel = viewModel()) {
             )
         }
 
-        // 抽屉面板
+        // 抽屉面板：与侧栏联动。上层侧栏不动，抽屉从它背后滑出 = 侧栏被拉开的效果
         AnimatedVisibility(
             visible = drawerOpen,
-            enter = slideInHorizontally { -it },
-            exit = slideOutHorizontally { -it },
-            modifier = Modifier.align(Alignment.CenterStart)
+            enter = slideInHorizontally(animationSpec = tween(280)) { -it },
+            exit = slideOutHorizontally(animationSpec = tween(240)) { -it },
+            modifier = Modifier
+                .align(Alignment.CenterStart)
+                .padding(start = 56.dp)
+                .zIndex(1f)
         ) {
             DrawerContent(
                 sessions = vm.sessions,

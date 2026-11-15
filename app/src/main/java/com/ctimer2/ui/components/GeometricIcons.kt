@@ -15,8 +15,8 @@ private val ICON_SIZE = 22.dp
 
 /** 成绩总评：三根高低不同的柱 */
 @Composable
-fun IconSummary(tint: Color = DragonCatBlue.PrimaryBlue) {
-    Canvas(Modifier.size(ICON_SIZE)) {
+fun IconSummary(tint: Color = DragonCatBlue.PrimaryBlue, iconSize: androidx.compose.ui.unit.Dp = ICON_SIZE) {
+    Canvas(Modifier.size(iconSize)) {
         val w = size.width
         val h = size.height
         val barW = w * 0.22f
@@ -35,8 +35,8 @@ fun IconSummary(tint: Color = DragonCatBlue.PrimaryBlue) {
 
 /** 按时间：表盘 + 两根指针 */
 @Composable
-fun IconTime(tint: Color = DragonCatBlue.PrimaryBlue) {
-    Canvas(Modifier.size(ICON_SIZE)) {
+fun IconTime(tint: Color = DragonCatBlue.PrimaryBlue, iconSize: androidx.compose.ui.unit.Dp = ICON_SIZE) {
+    Canvas(Modifier.size(iconSize)) {
         val r = size.minDimension / 2f
         val c = androidx.compose.ui.geometry.Offset(size.width / 2f, r)
         drawCircle(color = tint, radius = r - 1.dp.toPx(), center = c, style = Stroke(2.dp.toPx()))
@@ -47,8 +47,8 @@ fun IconTime(tint: Color = DragonCatBlue.PrimaryBlue) {
 
 /** 按成绩：领奖台三阶 */
 @Composable
-fun IconScore(tint: Color = DragonCatBlue.PrimaryBlue) {
-    Canvas(Modifier.size(ICON_SIZE)) {
+fun IconScore(tint: Color = DragonCatBlue.PrimaryBlue, iconSize: androidx.compose.ui.unit.Dp = ICON_SIZE) {
+    Canvas(Modifier.size(iconSize)) {
         val w = size.width
         val h = size.height
         val stepW = w / 3f
@@ -65,8 +65,8 @@ fun IconScore(tint: Color = DragonCatBlue.PrimaryBlue) {
 
 /** 列表：堆叠的三个圆角方块 */
 @Composable
-fun IconList(tint: Color = DragonCatBlue.PrimaryBlue) {
-    Canvas(Modifier.size(ICON_SIZE)) {
+fun IconList(tint: Color = DragonCatBlue.PrimaryBlue, iconSize: androidx.compose.ui.unit.Dp = ICON_SIZE) {
+    Canvas(Modifier.size(iconSize)) {
         val w = size.width
         val h = size.height
         val lineH = h / 5f
@@ -82,8 +82,8 @@ fun IconList(tint: Color = DragonCatBlue.PrimaryBlue) {
 
 /** 公式速记：一页公式纸（外框 + 三条公式行） */
 @Composable
-fun IconFormula(tint: Color = DragonCatBlue.PrimaryBlue) {
-    Canvas(Modifier.size(ICON_SIZE)) {
+fun IconFormula(tint: Color = DragonCatBlue.PrimaryBlue, iconSize: androidx.compose.ui.unit.Dp = ICON_SIZE) {
+    Canvas(Modifier.size(iconSize)) {
         val stroke = 2.dp.toPx()
         val w = size.width
         val h = size.height
@@ -109,8 +109,8 @@ fun IconFormula(tint: Color = DragonCatBlue.PrimaryBlue) {
 
 /** 导入：向下箭头 + 承接托盘 */
 @Composable
-fun IconImport(tint: Color = DragonCatBlue.TextSecondary) {
-    Canvas(Modifier.size(ICON_SIZE)) {
+fun IconImport(tint: Color = DragonCatBlue.TextSecondary, iconSize: androidx.compose.ui.unit.Dp = ICON_SIZE) {
+    Canvas(Modifier.size(iconSize)) {
         val stroke = 2.dp.toPx()
         val w = size.width
         val h = size.height
@@ -160,8 +160,8 @@ fun IconImport(tint: Color = DragonCatBlue.TextSecondary) {
 
 /** 设置：三根滑杆（每根一个圆点） */
 @Composable
-fun IconSettings(tint: Color = DragonCatBlue.TextSecondary) {
-    Canvas(Modifier.size(ICON_SIZE)) {
+fun IconSettings(tint: Color = DragonCatBlue.TextSecondary, iconSize: androidx.compose.ui.unit.Dp = ICON_SIZE) {
+    Canvas(Modifier.size(iconSize)) {
         val stroke = 2.dp.toPx()
         val w = size.width
         val h = size.height
@@ -187,8 +187,8 @@ fun IconSettings(tint: Color = DragonCatBlue.TextSecondary) {
 
 /** 重置卡片位置：环形箭头（箭头精确落在圆环端口上，方向沿切线） */
 @Composable
-fun IconReset(tint: Color = DragonCatBlue.TextSecondary) {
-    Canvas(Modifier.size(ICON_SIZE)) {
+fun IconReset(tint: Color = DragonCatBlue.TextSecondary, iconSize: androidx.compose.ui.unit.Dp = ICON_SIZE) {
+    Canvas(Modifier.size(iconSize)) {
         val stroke = 2.dp.toPx()
         val r = size.minDimension / 2f - stroke
         val c = androidx.compose.ui.geometry.Offset(size.width / 2f, size.height / 2f)
@@ -236,8 +236,8 @@ fun IconReset(tint: Color = DragonCatBlue.TextSecondary) {
 
 /** 云端排行：一朵云 + 下降箭头（代表云端数据落地） */
 @Composable
-fun IconCloud(tint: Color = DragonCatBlue.PrimaryBlue) {
-    Canvas(Modifier.size(ICON_SIZE)) {
+fun IconCloud(tint: Color = DragonCatBlue.PrimaryBlue, iconSize: androidx.compose.ui.unit.Dp = ICON_SIZE) {
+    Canvas(Modifier.size(iconSize)) {
         val w = size.width
         val h = size.height
         val stroke = 1.8.dp.toPx()
@@ -276,8 +276,8 @@ fun IconCloud(tint: Color = DragonCatBlue.PrimaryBlue) {
 
 /** 用户系统：几何人形（头 + 肩） */
 @Composable
-fun IconUser(tint: Color = DragonCatBlue.PrimaryBlue) {
-    Canvas(Modifier.size(ICON_SIZE)) {
+fun IconUser(tint: Color = DragonCatBlue.PrimaryBlue, iconSize: androidx.compose.ui.unit.Dp = ICON_SIZE) {
+    Canvas(Modifier.size(iconSize)) {
         val w = size.width
         val h = size.height
         val stroke = 1.8.dp.toPx()

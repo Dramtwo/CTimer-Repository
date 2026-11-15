@@ -13,8 +13,8 @@ android {
         applicationId = "com.ctimer2"
         minSdk = 26
         targetSdk = 36
-        versionCode = 22
-        versionName = "2.4.1"
+        versionCode = 23
+        versionName = "2.5.0"
     }
 
     buildTypes {

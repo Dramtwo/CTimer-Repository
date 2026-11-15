@@ -18,9 +18,10 @@ import com.ctimer2.ui.theme.DragonCatBlue
 @Composable
 fun StopwatchIcon(
     modifier: Modifier = Modifier,
-    tint: Color = DragonCatBlue.PrimaryBlueLight
+    tint: Color = DragonCatBlue.PrimaryBlueLight,
+    iconSize: androidx.compose.ui.unit.Dp = 28.dp
 ) {
-    Canvas(modifier = modifier.size(28.dp)) {
+    Canvas(modifier = modifier.size(iconSize)) {
         val stroke = 2.dp.toPx()
         val short = size.minDimension
         val cx = size.width / 2f
