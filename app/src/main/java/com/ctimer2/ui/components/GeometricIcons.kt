@@ -300,3 +300,39 @@ fun IconUser(tint: Color = DragonCatBlue.PrimaryBlue) {
         )
     }
 }
+
+/** 删除：几何垃圾桶（云端成绩行尾的删除按钮） */
+@Composable
+fun IconTrash(
+    tint: Color = DragonCatBlue.TextSecondary,
+    iconSize: androidx.compose.ui.unit.Dp = 16.dp
+) {
+    Canvas(Modifier.size(iconSize)) {
+        val w = size.width
+        val h = size.height
+        val stroke = 1.5.dp.toPx()
+        // 桶盖横线
+        drawLine(tint, androidx.compose.ui.geometry.Offset(w * 0.16f, h * 0.27f),
+            androidx.compose.ui.geometry.Offset(w * 0.84f, h * 0.27f), stroke)
+        // 提手
+        drawLine(tint, androidx.compose.ui.geometry.Offset(w * 0.38f, h * 0.27f),
+            androidx.compose.ui.geometry.Offset(w * 0.42f, h * 0.12f), stroke)
+        drawLine(tint, androidx.compose.ui.geometry.Offset(w * 0.42f, h * 0.12f),
+            androidx.compose.ui.geometry.Offset(w * 0.58f, h * 0.12f), stroke)
+        drawLine(tint, androidx.compose.ui.geometry.Offset(w * 0.58f, h * 0.12f),
+            androidx.compose.ui.geometry.Offset(w * 0.62f, h * 0.27f), stroke)
+        // 桶身（上宽下窄）
+        val body = Path().apply {
+            moveTo(w * 0.24f, h * 0.30f)
+            lineTo(w * 0.29f, h * 0.88f)
+            lineTo(w * 0.71f, h * 0.88f)
+            lineTo(w * 0.76f, h * 0.30f)
+        }
+        drawPath(body, tint, style = Stroke(stroke))
+        // 两道纹路
+        drawLine(tint, androidx.compose.ui.geometry.Offset(w * 0.41f, h * 0.42f),
+            androidx.compose.ui.geometry.Offset(w * 0.42f, h * 0.74f), stroke * 0.75f)
+        drawLine(tint, androidx.compose.ui.geometry.Offset(w * 0.59f, h * 0.42f),
+            androidx.compose.ui.geometry.Offset(w * 0.58f, h * 0.74f), stroke * 0.75f)
+    }
+}

@@ -16,6 +16,8 @@ data class LeaderboardUiState(
     val scores: List<RemoteScore> = emptyList(),
     val loading: Boolean = false,
     val uploading: Boolean = false,
+    /** 正在删除的 Issue 编号集合，UI 据此在对应行显示进度并禁用按钮 */
+    val deleting: Set<Int> = emptySet(),
     val message: String? = null,
     val error: String? = null
 )
@@ -77,6 +79,41 @@ class LeaderboardViewModel : ViewModel() {
                 refresh(userName)
             } else {
                 _state.update { it.copy(uploading = false, error = "上传失败：$err") }
+            }
+        }
+    }
+
+    /**
+     * 删除云端一条成绩：DELETE 掉对应的 GitHub Issue，成功后从列表里移除。
+     * 失败不做本地移除（保持和云端一致），并把原因显示在提示条上。
+     */
+    fun deleteScore(score: RemoteScore, userName: String? = null) {
+        val number = score.issueNumber
+        if (number <= 0) {
+            _state.update { it.copy(error = "这条记录缺少 Issue 编号，无法删除") }
+            return
+        }
+        _state.update { it.copy(deleting = it.deleting + number, error = null, message = null) }
+        viewModelScope.launch {
+            val err = withContext(Dispatchers.IO) {
+                GitHubRepository.deleteScoreWithRetry(number, score.nodeId)
+            }
+            if (err == null) {
+                _state.update { st ->
+                    st.copy(
+                        deleting = st.deleting - number,
+                        scores = st.scores.filterNot { it.issueNumber == number },
+                        message = "已从 GitHub 删除成绩 ${score.displayTime}",
+                        error = null
+                    )
+                }
+            } else {
+                _state.update { st ->
+                    st.copy(
+                        deleting = st.deleting - number,
+                        error = "删除失败：$err"
+                    )
+                }
             }
         }
     }

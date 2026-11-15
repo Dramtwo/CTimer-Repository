@@ -13,6 +13,8 @@ data class IssueDto(
     val state: String? = null,
     val created_at: String? = null,
     val html_url: String? = null,
+    /** GraphQL 的全局节点 ID（形如 I_kwDOxxx）。彻底删除 Issue 必须用它 */
+    @SerializedName("node_id") val nodeId: String? = null,
     /** 如果非 null 说明这条其实是 Pull Request，排行榜要过滤掉 */
     @SerializedName("pull_request") val pullRequest: Any? = null
 )
@@ -28,6 +30,30 @@ data class CreateIssueRequest(
     val labels: List<String> = emptyList()
 )
 
+/** 修改 Issue 的请求体（目前只用来把状态改成 closed） */
+data class UpdateIssueRequest(val state: String)
+
+/** GraphQL 请求体：{ query, variables } */
+data class GraphQLRequest(
+    val query: String,
+    val variables: Map<String, Any?> = emptyMap()
+)
+
+/** GraphQL 响应：要么 data 有值，要么 errors 里说明原因 */
+data class GraphQLResponse(
+    val data: GraphQLDeleteData? = null,
+    val errors: List<GraphQLError>? = null
+)
+
+data class GraphQLDeleteData(val deleteIssue: GraphQLDeleteResult? = null)
+
+data class GraphQLDeleteResult(val clientMutationId: String? = null)
+
+data class GraphQLError(
+    val message: String? = null,
+    val type: String? = null
+)
+
 /** 从 Issue 解析出来的成绩记录 */
 data class RemoteScore(
     val issueNumber: Int,
@@ -37,7 +63,9 @@ data class RemoteScore(
     val timestamp: Long,
     val author: String?,
     val issueUrl: String?,
-    val createdAt: String?
+    val createdAt: String?,
+    /** GraphQL 节点 ID，删除时用；老数据/解析失败可能为 null */
+    val nodeId: String? = null
 ) {
     /** 同步去重键：同一列表 + 同一时间戳 + 同一成绩 视为同一条 */
     val key: String get() = "${user ?: ""}|$session|$timestamp|$timeMs"
@@ -87,7 +115,14 @@ object ScorePayload {
     }
 
     /** 从任意文本里抠出成绩 JSON 并解析，失败返回 null */
-    fun parse(body: String?, issueNumber: Int, author: String?, url: String?, createdAt: String?): RemoteScore? {
+    fun parse(
+        body: String?,
+        issueNumber: Int,
+        author: String?,
+        url: String?,
+        createdAt: String?,
+        nodeId: String? = null
+    ): RemoteScore? {
         if (body.isNullOrBlank()) return null
         val start = body.indexOf(MARK_START)
         if (start < 0) return null
@@ -108,7 +143,8 @@ object ScorePayload {
                 timestamp = obj.optLong("ts", 0L),
                 author = author,
                 issueUrl = url,
-                createdAt = createdAt
+                createdAt = createdAt,
+                nodeId = nodeId
             )
         }.getOrNull()
     }

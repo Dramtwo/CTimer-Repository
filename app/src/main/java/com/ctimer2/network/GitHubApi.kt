@@ -2,6 +2,7 @@ package com.ctimer2.network
 
 import retrofit2.http.Body
 import retrofit2.http.GET
+import retrofit2.http.PATCH
 import retrofit2.http.POST
 import retrofit2.http.Path
 import retrofit2.http.Query
@@ -31,4 +32,25 @@ interface GitHubApi {
         @Path("repo") repo: String,
         @Body body: CreateIssueRequest
     ): IssueDto
+
+    /**
+     * 修改一条成绩 Issue。
+     * REST 没有可用的「彻底删除 Issue」端点（DELETE /issues/{number} 对个人仓库不生效），
+     * 所以删除走两条路：优先 GraphQL deleteIssue 真删除，失败时用这个把状态改成 closed 兜底。
+     */
+    @PATCH("repos/{owner}/{repo}/issues/{number}")
+    suspend fun updateIssue(
+        @Path("owner") owner: String,
+        @Path("repo") repo: String,
+        @Path("number") number: Int,
+        @Body body: UpdateIssueRequest
+    ): IssueDto
+
+    /**
+     * GitHub GraphQL（POST https://api.github.com/graphql）。
+     * 彻底删除 Issue 的唯一可靠方式：
+     * mutation { deleteIssue(input:{issueId:"<node_id>"}) { clientMutationId } }
+     */
+    @POST("graphql")
+    suspend fun graphql(@Body body: GraphQLRequest): GraphQLResponse
 }
