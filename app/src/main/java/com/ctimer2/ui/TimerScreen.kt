@@ -233,8 +233,12 @@ fun TimerScreen(vm: TimerViewModel = viewModel()) {
                 awaitEachGesture {
                     val down = awaitFirstDown(requireUnconsumed = true)
 
-                    // 处于总评 / 公式页面时，不响应计时手势
-                    if (vm.summaryPageOpen || vm.formulaPageOpen) {
+                    // 只要不在主计时页（总评 / 公式 / 云端排行 / 设置 / 用户中心任一页开着），
+                    // 或者抽屉 / 成绩悬浮菜单开着，就不响应整屏计时手势，避免在别的页面点按钮时误计时。
+                    // 注意：这里必须直接读 vm 的状态（组合期局部变量在 pointerInput 闭包里会停留在旧值）。
+                    val onOtherPage = vm.summaryPageOpen || vm.formulaPageOpen ||
+                        vm.leaderboardPageOpen || vm.settingsPageOpen || vm.userPageOpen
+                    if (onOtherPage || vm.drawerOpen || vm.actionMenuOpen) {
                         down.consume()
                         waitForUpOrCancellation()
                         return@awaitEachGesture

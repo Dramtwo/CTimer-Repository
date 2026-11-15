@@ -12,6 +12,8 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -64,9 +66,9 @@ fun LeaderboardScreen(
     // 待确认删除的成绩；非 null 时弹确认框
     var pendingDelete by remember { mutableStateOf<RemoteScore?>(null) }
 
-    // 进入页面或切换用户后刷新（只拉当前用户名的成绩）
-    LaunchedEffect(userName) {
-        viewModel.refresh(userName)
+    // 进入页面即拉全量成绩（用户筛选交给右上角下拉框）
+    LaunchedEffect(Unit) {
+        viewModel.refresh()
     }
 
     FrostedGlass(
@@ -118,16 +120,69 @@ fun LeaderboardScreen(
                         color = DragonCatBlue.TextPrimary
                     )
                     Text(
-                        text = if (userName.isNullOrBlank())
-                            "GitHub Issues · Dramtwo/CTimer-List · 全部用户"
-                        else "GitHub Issues · 仅显示 $userName",
+                        text = buildString {
+                            append("GitHub Issues · Dramtwo/CTimer-List · ")
+                            val sel = state.selectedUser
+                            append(if (sel == null) "所有用户" else "仅看 $sel")
+                            append(" · ${state.visibleScores.size} 条")
+                            if (!userName.isNullOrBlank() && sel == null) append("（上传身份 $userName）")
+                        },
                         style = MaterialTheme.typography.labelSmall,
                         color = DragonCatBlue.TextSecondary
                     )
                 }
                 Spacer(Modifier.weight(1f))
+
+                // ---- 用户筛选下拉（右上角）：任意用户 / 所有用户 ----
+                var userMenuOpen by remember { mutableStateOf(false) }
+                Box {
+                    Button(
+                        onClick = { userMenuOpen = true },
+                        shape = RoundedCornerShape(10.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = DragonCatBlue.CardSurface
+                        ),
+                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp)
+                    ) {
+                        Text(
+                            text = state.selectedUser ?: "所有用户",
+                            color = DragonCatBlue.TextPrimary,
+                            fontSize = 13.sp,
+                            maxLines = 1
+                        )
+                        Text("  ▾", color = DragonCatBlue.TextSecondary, fontSize = 12.sp)
+                    }
+                    DropdownMenu(
+                        expanded = userMenuOpen,
+                        onDismissRequest = { userMenuOpen = false }
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("所有用户", fontSize = 13.sp) },
+                            onClick = {
+                                viewModel.selectUser(null)
+                                userMenuOpen = false
+                            }
+                        )
+                        state.availableUsers.forEach { u ->
+                            DropdownMenuItem(
+                                text = {
+                                    Text(
+                                        "$u（${state.scores.count { it.user.equals(u, true) }}）",
+                                        fontSize = 13.sp
+                                    )
+                                },
+                                onClick = {
+                                    viewModel.selectUser(u)
+                                    userMenuOpen = false
+                                }
+                            )
+                        }
+                    }
+                }
+
+                Spacer(Modifier.width(8.dp))
                 Button(
-                    onClick = { viewModel.refresh(userName) },
+                    onClick = { viewModel.refresh() },
                     enabled = !state.loading,
                     shape = RoundedCornerShape(10.dp),
                     colors = ButtonDefaults.buttonColors(
@@ -207,10 +262,12 @@ fun LeaderboardScreen(
                     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         CircularProgressIndicator(color = DragonCatBlue.PrimaryBlue)
                     }
-                } else if (state.scores.isEmpty()) {
+                } else if (state.visibleScores.isEmpty()) {
                     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         Text(
-                            if (state.loading) "正在拉取…" else "云端还没有成绩，上传一条试试",
+                            if (state.loading) "正在拉取…"
+                            else if (state.selectedUser != null) "该用户暂无云端成绩"
+                            else "云端还没有成绩，上传一条试试",
                             fontSize = 13.sp,
                             color = DragonCatBlue.TextSecondary
                         )
@@ -220,7 +277,7 @@ fun LeaderboardScreen(
                         modifier = Modifier.fillMaxSize(),
                         verticalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
-                        itemsIndexed(state.scores, key = { _, s -> s.key }) { index, score ->
+                        itemsIndexed(state.visibleScores, key = { _, s -> s.key }) { index, score ->
                             ScoreLeaderRow(
                                 rank = index + 1,
                                 score = score,

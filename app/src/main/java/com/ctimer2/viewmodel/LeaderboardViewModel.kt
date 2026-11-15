@@ -18,9 +18,22 @@ data class LeaderboardUiState(
     val uploading: Boolean = false,
     /** 正在删除的 Issue 编号集合，UI 据此在对应行显示进度并禁用按钮 */
     val deleting: Set<Int> = emptySet(),
+    /** null = 所有用户；否则只看这个用户名上传的成绩 */
+    val selectedUser: String? = null,
     val message: String? = null,
     val error: String? = null
-)
+) {
+    /** 云端全量成绩里出现过的用户名，供右上角下拉选择 */
+    val availableUsers: List<String>
+        get() = scores.mapNotNull { it.user?.takeIf { u -> u.isNotBlank() } }
+            .distinct()
+            .sorted()
+
+    /** 按当前选择过滤后要显示的列表 */
+    val visibleScores: List<RemoteScore>
+        get() = selectedUser?.let { u -> scores.filter { it.user.equals(u, ignoreCase = true) } }
+            ?: scores
+}
 
 /**
  * 云端排行榜状态机：拉取 / 上传都走协程，结果用 StateFlow 推给 UI。
@@ -30,12 +43,16 @@ class LeaderboardViewModel : ViewModel() {
     private val _state = MutableStateFlow(LeaderboardUiState())
     val state: StateFlow<LeaderboardUiState> = _state.asStateFlow()
 
-    /** 从 GitHub Issues 拉取全部成绩并按成绩升序排列 */
-    fun refresh(userName: String? = null) {
+    /**
+     * 从 GitHub Issues 拉取**全部**成绩并按成绩升序排列。
+     * 不再按登录用户名过滤：所有用户的数据都拿下来，由 UI 的用户下拉框筛选，
+     * 避免换设备 / 换用户名后看不到先前上传的成绩（成绩"丢失"的错觉）。
+     */
+    fun refresh() {
         _state.update { it.copy(loading = true, error = null) }
         viewModelScope.launch {
             val result = runCatching {
-                withContext(Dispatchers.IO) { GitHubRepository.fetchScores(userName) }
+                withContext(Dispatchers.IO) { GitHubRepository.fetchScores(null) }
             }
             result.fold(
                 onSuccess = { list ->
@@ -76,7 +93,7 @@ class LeaderboardViewModel : ViewModel() {
             }
             if (err == null) {
                 _state.update { it.copy(uploading = false, message = "已上传") }
-                refresh(userName)
+                refresh()
             } else {
                 _state.update { it.copy(uploading = false, error = "上传失败：$err") }
             }
@@ -116,6 +133,11 @@ class LeaderboardViewModel : ViewModel() {
                 }
             }
         }
+    }
+
+    /** 右上角下拉框选择用户；null = 所有用户 */
+    fun selectUser(user: String?) {
+        _state.update { it.copy(selectedUser = user, message = null, error = null) }
     }
 
     fun clearMessage() {
