@@ -1,6 +1,10 @@
 package com.ctimer2.ui
 
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
@@ -272,27 +276,54 @@ fun LeaderboardScreen(
                         )
                     }
                 } else {
-                    LazyVerticalGrid(
-                        columns = GridCells.Fixed(2),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    // 入场动画只做「整块一次」，每张卡不再各自延迟 ——
+                    // 否则卡片是滚进视口才组合的，延迟从那一刻开始算，就成了「手滑过去、动画才追上」。
+                    var gridShown by remember { mutableStateOf(false) }
+                    LaunchedEffect(Unit) { gridShown = true }
+                    val gridIn by animateFloatAsState(
+                        targetValue = if (gridShown) 1f else 0f,
+                        animationSpec = tween(180),
+                        label = "gridIn"
+                    )
+                    val gridShiftPx = with(androidx.compose.ui.platform.LocalDensity.current) {
+                        10.dp.toPx()
+                    }
+                    // 切换筛选用户时整体快速交叉淡入（同样不做逐卡延迟）
+                    androidx.compose.animation.AnimatedContent(
+                        targetState = state.selectedUser,
+                        transitionSpec = {
+                            fadeIn(tween(160)) togetherWith fadeOut(tween(120))
+                        },
+                        label = "filterSwitch",
                         modifier = Modifier.fillMaxSize()
-                    ) {
-                        itemsIndexed(
-                            items = state.visibleScores,
-                            key = { _, s -> s.key }
-                        ) { index, score ->
-                            ScoreGridCard(
-                                rank = index + 1,
-                                score = score,
-                                deleting = score.issueNumber in state.deleting,
-                                onDelete = { pendingDelete = score },
-                                modifier = Modifier.animateItem(
-                                    fadeInSpec = tween(220),
-                                    placementSpec = tween(260),
-                                    fadeOutSpec = tween(160)
+                    ) { _ ->
+                        LazyVerticalGrid(
+                            columns = GridCells.Fixed(2),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .graphicsLayer {
+                                    alpha = gridIn
+                                    translationY = (1f - gridIn) * gridShiftPx
+                                }
+                        ) {
+                            itemsIndexed(
+                                items = state.visibleScores,
+                                key = { _, s -> s.key }
+                            ) { index, score ->
+                                ScoreGridCard(
+                                    rank = index + 1,
+                                    score = score,
+                                    deleting = score.issueNumber in state.deleting,
+                                    onDelete = { pendingDelete = score },
+                                    modifier = Modifier.animateItem(
+                                        fadeInSpec = tween(180),
+                                        placementSpec = tween(220),
+                                        fadeOutSpec = tween(140)
+                                    )
                                 )
-                            )
+                            }
                         }
                     }
                 }
@@ -347,7 +378,6 @@ private fun ScoreGridCard(
     onDelete: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val density = androidx.compose.ui.platform.LocalDensity.current
     val podium = rank <= 3
     val bg by animateColorAsState(
         targetValue = when (rank) {
@@ -364,18 +394,8 @@ private fun ScoreGridCard(
         animationSpec = tween(260),
         label = "badgeColor"
     )
-    // 入场：卡片依次上浮淡入（延迟按名次阶梯，最多吃 12 档，避免长列表末尾等太久）
-    var appeared by remember(score.key) { mutableStateOf(false) }
-    LaunchedEffect(score.key) {
-        kotlinx.coroutines.delay((rank.coerceAtMost(12) - 1) * 32L)
-        appeared = true
-    }
-    val enter by animateFloatAsState(
-        targetValue = if (appeared) 1f else 0f,
-        animationSpec = tween(240),
-        label = "cardEnter"
-    )
-    // 删除中：整卡轻微收缩，给一点「按下去」的反馈
+    // 只保留「删除中」的收缩反馈。入场动画统一交给网格整块做，
+    // 卡片自己不再带延迟，滚动时也就不会被动画拖在后面。
     val pressScale by animateFloatAsState(
         targetValue = if (deleting) 0.955f else 1f,
         animationSpec = tween(150),
@@ -389,8 +409,6 @@ private fun ScoreGridCard(
             .graphicsLayer {
                 scaleX = pressScale
                 scaleY = pressScale
-                alpha = enter
-                translationY = with(density) { ((1f - enter) * 14.dp.toPx()) }
             }
             .clip(RoundedCornerShape(14.dp))
             .background(bg)

@@ -2,6 +2,7 @@ package com.ctimer2.ui.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.fillMaxSize
@@ -86,9 +87,21 @@ fun FrostedGlass(
             .clip(shape)
             .background(solidBase.copy(alpha = if (glass.mode == GlassMode.SOLID) 1f else alpha))
             .then(
-                if (showBorder && glass.mode != GlassMode.SOLID) {
-                    Modifier.border(1.dp, DragonCatBlue.GlassBorder, shape)
-                } else Modifier
+                when {
+                    !showBorder -> Modifier
+                    // 玻璃：上亮下暗的渐变描边，比单色白线更像真实玻璃的边缘反光
+                    glass.mode != GlassMode.SOLID -> Modifier.border(
+                        width = 1.3.dp,
+                        brush = Brush.verticalGradient(
+                            0f to Color.White.copy(alpha = 0.82f),
+                            0.42f to Color.White.copy(alpha = 0.24f),
+                            1f to Color.White.copy(alpha = 0.46f)
+                        ),
+                        shape = shape
+                    )
+                    // 实色（默认）：也给一条极淡的亮边，避免界面看起来「死板」
+                    else -> Modifier.border(1.dp, DragonCatBlue.GlassBorderSoft, shape)
+                }
             )
     ) {
         // 预烘焙模糊背景：按窗口像素精确裁切对应区域（不会错位、不撑高卡片）
@@ -104,6 +117,21 @@ fun FrostedGlass(
                 modifier = Modifier
                     .matchParentSize()
                     .background(Color.White.copy(alpha = alpha))
+            )
+        }
+
+        // 顶部一层极淡的内高光：玻璃上缘反光，让面板「薄」一点、更像磨砂玻璃
+        if (glass.mode != GlassMode.SOLID) {
+            Box(
+                modifier = Modifier
+                    .matchParentSize()
+                    .background(
+                        Brush.verticalGradient(
+                            0f to Color.White.copy(alpha = 0.18f),
+                            0.28f to Color.White.copy(alpha = 0.04f),
+                            1f to Color.Transparent
+                        )
+                    )
             )
         }
 

@@ -1,6 +1,9 @@
 package com.ctimer2.ui.components
 
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -32,6 +35,10 @@ fun DrawerContent(
     onDelete: (Long) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    // 抽屉打开时，块与块依次滑出（错开 45ms），比刷一下全出来舒服
+    var shown by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { shown = true }
+
     var menuSession by remember { mutableStateOf<SessionEntity?>(null) }
     var showNewDialog by remember { mutableStateOf(false) }
     var renameTarget by remember { mutableStateOf<SessionEntity?>(null) }
@@ -55,29 +62,35 @@ fun DrawerContent(
             color = DragonCatBlue.TextSecondary,
             modifier = Modifier.padding(bottom = 6.dp)
         )
-        DrawerEntryItem(
-            title = "成绩总评",
-            subtitle = "最佳 / 平均 / 稳定性",
-            selected = false,
-            onClick = { onOpenSummary() },
-            icon = { IconSummary() }
-        )
+        StaggerIn(index = 0, shown = shown) {
+            DrawerEntryItem(
+                title = "成绩总评",
+                subtitle = "最佳 / 平均 / 稳定性",
+                selected = false,
+                onClick = { onOpenSummary() },
+                icon = { IconSummary() }
+            )
+        }
         Spacer(Modifier.height(4.dp))
-        DrawerEntryItem(
-            title = "公式速记",
-            subtitle = "七步口诀与字母对照",
-            selected = false,
-            onClick = { onOpenFormula() },
-            icon = { IconFormula() }
-        )
+        StaggerIn(index = 1, shown = shown) {
+            DrawerEntryItem(
+                title = "公式速记",
+                subtitle = "七步口诀与字母对照",
+                selected = false,
+                onClick = { onOpenFormula() },
+                icon = { IconFormula() }
+            )
+        }
         Spacer(Modifier.height(4.dp))
-        DrawerEntryItem(
-            title = "云端排行",
-            subtitle = "GitHub Issues 云端成绩",
-            selected = false,
-            onClick = { onOpenLeaderboard() },
-            icon = { IconCloud() }
-        )
+        StaggerIn(index = 2, shown = shown) {
+            DrawerEntryItem(
+                title = "云端排行",
+                subtitle = "GitHub Issues 云端成绩",
+                selected = false,
+                onClick = { onOpenLeaderboard() },
+                icon = { IconCloud() }
+            )
+        }
 
         Spacer(Modifier.height(14.dp))
         Text(
@@ -92,7 +105,7 @@ fun DrawerContent(
             verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
             items(sessions, key = { it.id }) { session ->
-                Box {
+                Box(Modifier.animateItem()) {
                     SessionItem(
                         session = session,
                         count = countOf(session.id),
@@ -212,4 +225,26 @@ private fun NameInputDialog(
             TextButton(onClick = onDismiss) { Text("取消") }
         }
     )
+}
+
+/** 依次滑入的容器：抽屉里的每一块用它错开入场 */
+@Composable
+private fun StaggerIn(
+    index: Int,
+    shown: Boolean,
+    content: @Composable () -> Unit
+) {
+    val p by animateFloatAsState(
+        targetValue = if (shown) 1f else 0f,
+        animationSpec = tween(durationMillis = 220, delayMillis = index * 45),
+        label = "stagger$index"
+    )
+    Box(
+        modifier = Modifier.graphicsLayer {
+            alpha = p
+            translationX = (1f - p) * (-16).dp.toPx()
+        }
+    ) {
+        content()
+    }
 }

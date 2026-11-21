@@ -17,8 +17,12 @@ import androidx.compose.animation.expandHorizontally
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkHorizontally
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitEachGesture
@@ -339,13 +343,19 @@ fun TimerScreen(vm: TimerViewModel = viewModel()) {
         // 底层：自定义背景图或内置默认背景图（默认保持清晰）
         AppBackground(customBitmap, vm.bgBlur)
 
-        // 云端上传提示（顶部浮出的小玻璃条，2 秒后自动消失）
-        vm.cloudUploadHint?.let { hint ->
+        // 云端上传提示（顶部浮出的小玻璃条，滑落 + 缩放淡入，2 秒后自动消失）
+        AnimatedVisibility(
+            visible = vm.cloudUploadHint != null,
+            enter = slideInVertically(animationSpec = tween(240)) { -it } +
+                fadeIn(tween(150)) + scaleIn(initialScale = 0.88f, animationSpec = tween(240)),
+            exit = slideOutVertically(animationSpec = tween(170)) { -it } +
+                fadeOut(tween(110)) + scaleOut(targetScale = 0.9f, animationSpec = tween(170)),
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .zIndex(3f)
+        ) {
             FrostedGlass(
-                modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .zIndex(3f)
-                    .padding(top = 10.dp),
+                modifier = Modifier.padding(top = 10.dp),
                 shape = RoundedCornerShape(14.dp),
                 tintAlphaShift = 0.10f
             ) {
@@ -356,7 +366,7 @@ fun TimerScreen(vm: TimerViewModel = viewModel()) {
                     Box(Modifier.size(22.dp)) { IconCloud() }
                     Spacer(Modifier.width(9.dp))
                     Text(
-                        text = hint,
+                        text = vm.cloudUploadHint ?: "",
                         fontSize = 13.sp,
                         color = DragonCatBlue.TextPrimary
                     )
@@ -373,8 +383,14 @@ fun TimerScreen(vm: TimerViewModel = viewModel()) {
         AnimatedContent(
             targetState = page,
             transitionSpec = {
-                (slideInHorizontally(animationSpec = tween(300)) { -it / 2 } + fadeIn(tween(180)))
-                    .togetherWith(slideOutHorizontally(animationSpec = tween(220)) { it / 4 } + fadeOut(tween(100)))
+                (slideInHorizontally(animationSpec = tween(300)) { -it / 2 } +
+                    fadeIn(tween(180)) +
+                    scaleIn(initialScale = 0.965f, animationSpec = tween(320)))
+                    .togetherWith(
+                        slideOutHorizontally(animationSpec = tween(220)) { it / 4 } +
+                            fadeOut(tween(100)) +
+                            scaleOut(targetScale = 0.985f, animationSpec = tween(220))
+                    )
             },
             modifier = Modifier
                 .fillMaxSize()
