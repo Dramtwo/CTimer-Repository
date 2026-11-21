@@ -1,11 +1,14 @@
 package com.ctimer2.ui
 
-import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -41,6 +44,7 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -208,7 +212,10 @@ fun LeaderboardScreen(
             Spacer(Modifier.height(10.dp))
 
             // ---- 上传区（压成一行，尽量把空间留给列表） ----
+            // 原先给输入框硬套 52dp 高度，M3 的 OutlinedTextField 在固定高度里文字会偏上，
+            // 看着就像「文字没居中」。改为 minHeight + 居中 textStyle，按钮同高对齐。
             Row(
+                modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
@@ -216,33 +223,47 @@ fun LeaderboardScreen(
                     value = timeInput,
                     onValueChange = { timeInput = it },
                     label = { Text("成绩（秒）", fontSize = 11.sp) },
+                    placeholder = { Text("12.34", fontSize = 13.sp, textAlign = TextAlign.Center) },
                     singleLine = true,
+                    textStyle = TextStyle(
+                        fontSize = 13.sp,
+                        textAlign = TextAlign.Center,
+                        color = DragonCatBlue.TextPrimary
+                    ),
                     modifier = Modifier
                         .weight(0.28f)
-                        .height(52.dp)
+                        .defaultMinSize(minHeight = 56.dp)
                 )
                 OutlinedTextField(
                     value = sessionInput,
                     onValueChange = { sessionInput = it },
                     label = { Text("列表名", fontSize = 11.sp) },
                     singleLine = true,
+                    textStyle = TextStyle(
+                        fontSize = 13.sp,
+                        textAlign = TextAlign.Center,
+                        color = DragonCatBlue.TextPrimary
+                    ),
                     modifier = Modifier
                         .weight(0.44f)
-                        .height(52.dp)
+                        .defaultMinSize(minHeight = 56.dp)
                 )
                 Button(
                     onClick = { viewModel.upload(timeInput, sessionInput, userName) },
                     enabled = !state.uploading,
-                    shape = RoundedCornerShape(10.dp),
+                    shape = RoundedCornerShape(12.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = DragonCatBlue.PrimaryBlue),
+                    contentPadding = PaddingValues(horizontal = 4.dp),
                     modifier = Modifier
                         .weight(0.2f)
-                        .height(52.dp)
+                        .height(56.dp)
                 ) {
                     Text(
-                        if (state.uploading) "上传中…" else "上传",
+                        text = if (state.uploading) "上传中…" else "上传",
                         color = Color.White,
-                        fontSize = 12.sp
+                        fontSize = 13.sp,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.fillMaxWidth()
                     )
                 }
             }
@@ -276,54 +297,31 @@ fun LeaderboardScreen(
                         )
                     }
                 } else {
-                    // 入场动画只做「整块一次」，每张卡不再各自延迟 ——
-                    // 否则卡片是滚进视口才组合的，延迟从那一刻开始算，就成了「手滑过去、动画才追上」。
-                    var gridShown by remember { mutableStateOf(false) }
-                    LaunchedEffect(Unit) { gridShown = true }
-                    val gridIn by animateFloatAsState(
-                        targetValue = if (gridShown) 1f else 0f,
-                        animationSpec = tween(180),
-                        label = "gridIn"
-                    )
-                    val gridShiftPx = with(androidx.compose.ui.platform.LocalDensity.current) {
-                        10.dp.toPx()
-                    }
-                    // 切换筛选用户时整体快速交叉淡入（同样不做逐卡延迟）
-                    androidx.compose.animation.AnimatedContent(
-                        targetState = state.selectedUser,
-                        transitionSpec = {
-                            fadeIn(tween(160)) togetherWith fadeOut(tween(120))
-                        },
-                        label = "filterSwitch",
+                    LazyVerticalGrid(
+                        columns = GridCells.Fixed(2),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
                         modifier = Modifier.fillMaxSize()
-                    ) { _ ->
-                        LazyVerticalGrid(
-                            columns = GridCells.Fixed(2),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp),
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .graphicsLayer {
-                                    alpha = gridIn
-                                    translationY = (1f - gridIn) * gridShiftPx
-                                }
-                        ) {
-                            itemsIndexed(
-                                items = state.visibleScores,
-                                key = { _, s -> s.key }
-                            ) { index, score ->
-                                ScoreGridCard(
-                                    rank = index + 1,
-                                    score = score,
-                                    deleting = score.issueNumber in state.deleting,
-                                    onDelete = { pendingDelete = score },
-                                    modifier = Modifier.animateItem(
-                                        fadeInSpec = tween(180),
-                                        placementSpec = tween(220),
-                                        fadeOutSpec = tween(140)
-                                    )
+                    ) {
+                        itemsIndexed(
+                            items = state.visibleScores,
+                            key = { _, s -> s.key }
+                        ) { index, score ->
+                            ScoreGridCard(
+                                rank = index + 1,
+                                score = score,
+                                deleting = score.issueNumber in state.deleting,
+                                onDelete = { pendingDelete = score },
+                                modifier = Modifier.animateItem(
+                                    // 新增条目淡入；让位用弹簧，Q 弹一点
+                                    fadeInSpec = tween(220),
+                                    placementSpec = spring(
+                                        dampingRatio = Spring.DampingRatioMediumBouncy,
+                                        stiffness = Spring.StiffnessLow
+                                    ),
+                                    fadeOutSpec = tween(150)
                                 )
-                            }
+                            )
                         }
                     }
                 }
@@ -394,11 +392,20 @@ private fun ScoreGridCard(
         animationSpec = tween(260),
         label = "badgeColor"
     )
-    // 只保留「删除中」的收缩反馈。入场动画统一交给网格整块做，
-    // 卡片自己不再带延迟，滚动时也就不会被动画拖在后面。
+    // 入场：零延迟、200ms 的「淡入 + 从下方 12dp 浮上来 + 0.95→1 放大」。
+    // 不用阶梯延迟（延迟会让滚进视口的卡片看起来慢半拍），动画值只在 graphicsLayer 里读，
+    // 属于渲染阶段，不触发 Composable 重组。
+    var appeared by remember(score.key) { mutableStateOf(false) }
+    LaunchedEffect(score.key) { appeared = true }
+    val enter by animateFloatAsState(
+        targetValue = if (appeared) 1f else 0f,
+        animationSpec = tween(200, easing = FastOutSlowInEasing),
+        label = "cardEnter"
+    )
+    // 删除中：整卡轻微收缩，给一点「按下去」的反馈
     val pressScale by animateFloatAsState(
         targetValue = if (deleting) 0.955f else 1f,
-        animationSpec = tween(150),
+        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow),
         label = "cardPress"
     )
 
@@ -406,9 +413,13 @@ private fun ScoreGridCard(
         modifier = modifier
             .fillMaxWidth()
             .height(80.dp)
+            .animateContentSize()
             .graphicsLayer {
-                scaleX = pressScale
-                scaleY = pressScale
+                val s = (0.95f + 0.05f * enter) * pressScale
+                scaleX = s
+                scaleY = s
+                alpha = enter
+                translationY = (1f - enter) * 12.dp.toPx()
             }
             .clip(RoundedCornerShape(14.dp))
             .background(bg)

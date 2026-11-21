@@ -10,7 +10,10 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandHorizontally
@@ -37,6 +40,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.graphics.asImageBitmap
@@ -49,6 +53,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
@@ -343,21 +348,22 @@ fun TimerScreen(vm: TimerViewModel = viewModel()) {
         // 底层：自定义背景图或内置默认背景图（默认保持清晰）
         AppBackground(customBitmap, vm.bgBlur)
 
-        // 云端上传提示（顶部浮出的小玻璃条，滑落 + 缩放淡入，2 秒后自动消失）
+        // 云端上传提示（底部浮出的小玻璃条：从下方滑入 + 淡入 + 轻微放大，慢慢「凝成玻璃」）
         AnimatedVisibility(
             visible = vm.cloudUploadHint != null,
-            enter = slideInVertically(animationSpec = tween(240)) { -it } +
-                fadeIn(tween(150)) + scaleIn(initialScale = 0.88f, animationSpec = tween(240)),
-            exit = slideOutVertically(animationSpec = tween(170)) { -it } +
-                fadeOut(tween(110)) + scaleOut(targetScale = 0.9f, animationSpec = tween(170)),
+            enter = slideInVertically(animationSpec = tween(300, easing = FastOutSlowInEasing)) { it } +
+                fadeIn(tween(220)) + scaleIn(initialScale = 0.86f, animationSpec = tween(300, easing = FastOutSlowInEasing)),
+            exit = slideOutVertically(animationSpec = tween(200, easing = FastOutSlowInEasing)) { it } +
+                fadeOut(tween(140)) + scaleOut(targetScale = 0.9f, animationSpec = tween(200)),
             modifier = Modifier
-                .align(Alignment.TopCenter)
+                .align(Alignment.BottomCenter)
                 .zIndex(3f)
         ) {
             FrostedGlass(
-                modifier = Modifier.padding(top = 10.dp),
+                modifier = Modifier.padding(bottom = 26.dp),
                 shape = RoundedCornerShape(14.dp),
-                tintAlphaShift = 0.10f
+                tintAlphaShift = 0.10f,
+                highlighted = true
             ) {
                 Row(
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 9.dp),
@@ -383,13 +389,25 @@ fun TimerScreen(vm: TimerViewModel = viewModel()) {
         AnimatedContent(
             targetState = page,
             transitionSpec = {
-                (slideInHorizontally(animationSpec = tween(300)) { -it / 2 } +
-                    fadeIn(tween(180)) +
-                    scaleIn(initialScale = 0.965f, animationSpec = tween(320)))
+                val slideSpec = tween<IntOffset>(400, easing = FastOutSlowInEasing)
+                val fadeSpec = tween<Float>(360, easing = FastOutSlowInEasing)
+                val scaleSpec = tween<Float>(400, easing = FastOutSlowInEasing)
+                // 新页面从右侧推近（滑入 + 淡入 + 0.94→1 放大），旧页面向左淡出并轻微缩小
+                (slideInHorizontally(animationSpec = slideSpec) { it / 2 } +
+                    fadeIn(fadeSpec) +
+                    scaleIn(
+                        initialScale = 0.94f,
+                        transformOrigin = TransformOrigin(0.15f, 0.5f),
+                        animationSpec = scaleSpec
+                    ))
                     .togetherWith(
-                        slideOutHorizontally(animationSpec = tween(220)) { it / 4 } +
-                            fadeOut(tween(100)) +
-                            scaleOut(targetScale = 0.985f, animationSpec = tween(220))
+                        slideOutHorizontally(animationSpec = slideSpec) { -it / 4 } +
+                            fadeOut(tween(260, easing = FastOutSlowInEasing)) +
+                            scaleOut(
+                                targetScale = 0.92f,
+                                transformOrigin = TransformOrigin(0.15f, 0.5f),
+                                animationSpec = scaleSpec
+                            )
                     )
             },
             modifier = Modifier
@@ -528,8 +546,16 @@ fun TimerScreen(vm: TimerViewModel = viewModel()) {
         // 抽屉面板：与侧栏联动。上层侧栏不动，抽屉从它背后滑出 = 侧栏被拉开的效果
         AnimatedVisibility(
             visible = drawerOpen,
-            enter = slideInHorizontally(animationSpec = tween(280)) { -it },
-            exit = slideOutHorizontally(animationSpec = tween(240)) { -it },
+            // 弹性呼出：低刚度 + 中弹跳，会轻轻过冲再回位，比线性时间动画「Q 弹」
+            enter = slideInHorizontally(
+                animationSpec = spring(
+                    dampingRatio = Spring.DampingRatioMediumBouncy,
+                    stiffness = Spring.StiffnessLow
+                )
+            ) { -it } + fadeIn(tween(180)),
+            exit = slideOutHorizontally(
+                animationSpec = tween(240, easing = FastOutSlowInEasing)
+            ) { -it } + fadeOut(tween(160)),
             modifier = Modifier
                 .align(Alignment.CenterStart)
                 .padding(start = 56.dp)

@@ -4,7 +4,34 @@ CTimer2 的所有版本更新记录。APK 不放进仓库，也不作为 Release
 
 ---
 
-## v2.6.2（当前版本，versionCode 27）
+## v2.7.0（当前版本，versionCode 28）
+
+这一版是「动效质感」专项：四套旗舰级动画落地，同时修掉上一版把云端列表动画误删、上传行文字不居中的问题。
+
+### 修复
+
+- **云端列表动画被误删**：上一版为了避免「慢半拍」直接砍掉了卡片入场，结果列表看着完全静态。现在恢复为**零延迟**入场：200ms 内淡入 + 从下方 12dp 浮起 + 0.95→1 放大。因为没有延迟、动画值只在渲染层读，滚动时依然跟手，但新卡片有质感了。
+- **上传行文字不居中**：「成绩（秒）」/「列表名」输入框原来被硬套 52dp 高度，Material3 的 OutlinedTextField 在固定高度里文字会偏上。改为 `defaultMinSize(56dp)` + 居中 `textStyle`，「上传」按钮同高对齐、文字居中。
+
+### 四套动效
+
+1. **页面切换的空间层级感**：`AnimatedContent` 400ms、`FastOutSlowInEasing` —— 新页从右侧滑入（半屏位移）+ 淡入 + `0.94→1` 放大（`TransformOrigin(0.15, 0.5)`，像从深空推近）；旧页向左退 1/4 屏 + 淡出 + 缩到 0.92。
+2. **列表的流体物理**：云端双列卡片新增 `Modifier.animateItem()`（新增淡入 220ms、让位用 `spring(MediumBouncy, StiffnessLow)`、移除 150ms），并给卡片加 `animateContentSize()`，内容高度变化时顺滑过渡。
+3. **果冻物理**：
+   - 轮盘按钮选中、中心「取消」钮、侧栏呼出、拖动卡片拿起/放下，全部换成 `spring(dampingRatio = MediumBouncy, stiffness = StiffnessLow)`。
+   - 长按拖动 Logo 卡 / 成绩卡时放大到 **1.05**，并按拖动状态给 `shadowElevation` 0→18dp（形状圆角 16dp、淡蓝环境光 + 点光源阴影），松手弹簧回位。
+4. **材质的呼吸感**：
+   - `FrostedGlass` 新增 `highlighted` 参数：高亮时边缘用 `rememberInfiniteTransition` 做 1.4s 来回的呼吸高光（白色内描边 0.22→0.80 + 主蓝外晕），轮盘选中按钮与底部提示条已接入。
+   - 底部提示条改为**从底部向上滑入**（滑入 + 淡入 + 0.86→1 放大，300ms），并带呼吸高光，像「慢慢凝成一块玻璃」。
+
+### 性能
+
+- 所有位移/缩放/阴影/透明度动画都写在 `graphicsLayer { }` 与 `drawWithContent { }` 的 lambda 里，**在渲染阶段读取动画值，不触发 Composable 重组**；模糊底图仍然是预烘焙一次、面板只做平移裁切。
+- 动画时长统一落在 200–400ms 区间。
+
+---
+
+## v2.6.2（versionCode 27）
 
 ### 修复
 

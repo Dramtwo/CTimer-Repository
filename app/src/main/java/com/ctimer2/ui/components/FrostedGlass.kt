@@ -8,7 +8,14 @@ import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.State
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -22,6 +29,10 @@ import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.Outline
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.unit.IntSize
@@ -57,6 +68,11 @@ fun FrostedGlass(
      * - false：玻璃「分区」，只用淡色+高光边（叠在别的玻璃层上用，避免双层模糊造成割裂）
      */
     backdrop: Boolean = true,
+    /**
+     * 高亮态：边缘会做「呼吸式」高光渐变（白色描边 + 主蓝外晕在渲染层来回呼吸）。
+     * 只重绘不重组，适合选中态 / 提示条这类需要存在感的玻璃。
+     */
+    highlighted: Boolean = false,
     content: @Composable BoxScope.() -> Unit
 ) {
     val glass = LocalGlass.current
@@ -72,8 +88,52 @@ fun FrostedGlass(
         else -> Color.White
     }
 
+    // 呼吸高光：只在高亮且非实色时创建无限过渡；数值在 draw 阶段读取（渲染层，不触发重组）
+    val breath: State<Float> = if (highlighted && glass.mode != GlassMode.SOLID) {
+        val transition = rememberInfiniteTransition(label = "glassBreath")
+        transition.animateFloat(
+            initialValue = 0.22f,
+            targetValue = 0.80f,
+            animationSpec = infiniteRepeatable(
+                animation = androidx.compose.animation.core.tween(
+                    durationMillis = 1400,
+                    easing = FastOutSlowInEasing
+                ),
+                repeatMode = RepeatMode.Reverse
+            ),
+            label = "breathAlpha"
+        )
+    } else {
+        remember { mutableFloatStateOf(0f) }
+    }
+
     Box(
         modifier = modifier
+            .drawWithContent {
+                drawContent()
+                // 渲染阶段读 alpha：动画只引起重绘，不引起重组
+                val a = breath.value
+                if (a > 0.02f) {
+                    val path = Path()
+                    when (val outline = shape.createOutline(size, layoutDirection, this)) {
+                        is Outline.Rectangle -> path.addRect(outline.rect)
+                        is Outline.Rounded -> path.addRoundRect(outline.roundRect)
+                        is Outline.Generic -> path.addPath(outline.path)
+                        else -> Unit
+                    }
+                    // 主蓝外晕 + 白色内高光，两层描边一起呼吸
+                    drawPath(
+                        path = path,
+                        color = DragonCatBlue.PrimaryBlue.copy(alpha = a * 0.30f),
+                        style = Stroke(width = 3.4.dp.toPx())
+                    )
+                    drawPath(
+                        path = path,
+                        color = Color.White.copy(alpha = a * 0.55f),
+                        style = Stroke(width = 1.7.dp.toPx())
+                    )
+                }
+            }
             .onGloballyPositioned { coords ->
                 pos = coords.positionInWindow().toIntOffset()
                 var root: LayoutCoordinates = coords

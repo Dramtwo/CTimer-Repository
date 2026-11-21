@@ -125,7 +125,7 @@ fun RadialWheelMenu(
         val cancelSel = selected == WheelSlot.CANCEL
         val cancelScale by animateFloatAsState(
             targetValue = if (cancelSel) 1.10f else 1f,
-            animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy),
+            animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow),
             label = "cancelScale"
         )
         val cancelBg by animateColorAsState(
@@ -151,7 +151,8 @@ fun RadialWheelMenu(
             FrostedGlass(
                 modifier = Modifier.fillMaxSize(),
                 shape = CircleShape,
-                tintAlphaShift = if (cancelSel) -0.20f else -0.02f
+                tintAlphaShift = if (cancelSel) -0.20f else -0.02f,
+                highlighted = cancelSel
             ) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Text(
@@ -176,7 +177,7 @@ fun RadialWheelMenu(
 
             val scale by animateFloatAsState(
                 targetValue = if (isSel) 1.13f else 1f,
-                animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy),
+                animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow),
                 label = "btnScale$index"
             )
             // 逐个弹出的入场延迟
@@ -218,7 +219,9 @@ fun RadialWheelMenu(
                         isSel && item.danger -> -0.30f
                         isSel -> -0.36f
                         else -> 0.02f
-                    }
+                    },
+                    // 选中的按钮边缘高光呼吸，一眼能看出「现在是它」
+                    highlighted = isSel
                 ) {
                     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         Text(

@@ -1,11 +1,14 @@
 package com.ctimer2.ui.components
 
+import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.awaitLongPressOrCancellation
 import androidx.compose.foundation.gestures.drag
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.Column
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -39,7 +42,23 @@ fun DraggableCard(
     val offsetX = remember { mutableFloatStateOf(initialOffset.first) }
     val offsetY = remember { mutableFloatStateOf(initialOffset.second) }
     var dragging by remember { mutableStateOf(false) }
-    val scale by animateFloatAsState(if (dragging) 1.03f else 1f, label = "cardScale")
+    // 「拿起来再放下」：拖动时放大到 1.05 并加深阴影，松手用弹簧瞬间弹回
+    val scale by animateFloatAsState(
+        targetValue = if (dragging) 1.05f else 1f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessLow
+        ),
+        label = "cardScale"
+    )
+    val elevation by animateFloatAsState(
+        targetValue = if (dragging) 18f else 0f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessLow
+        ),
+        label = "cardElevation"
+    )
 
     // 外部复位（侧栏底部「重置卡片位置」）时把内部位移同步回来
     LaunchedEffect(initialOffset) {
@@ -54,6 +73,11 @@ fun DraggableCard(
                 translationY = offsetY.floatValue.dp.toPx()
                 scaleX = scale
                 scaleY = scale
+                // 阴影也走渲染层：拿起来时浮起来，松手落回去
+                shape = RoundedCornerShape(16.dp)
+                shadowElevation = elevation.dp.toPx()
+                ambientShadowColor = androidx.compose.ui.graphics.Color(0x335B9BD5)
+                spotShadowColor = androidx.compose.ui.graphics.Color(0x405B9BD5)
             }
             .pointerInput(cardKey) {
                 awaitEachGesture {
