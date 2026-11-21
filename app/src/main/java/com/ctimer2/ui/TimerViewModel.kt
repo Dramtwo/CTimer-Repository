@@ -19,6 +19,7 @@ import com.ctimer2.ui.components.WheelSlot
 import com.ctimer2.ui.theme.DragonCatBlue
 import com.ctimer2.ui.theme.GlassMode
 import com.ctimer2.ui.theme.GlassStyle
+import com.ctimer2.ui.theme.PerfMode
 import com.ctimer2.util.BackgroundStore
 import com.ctimer2.util.Scramble
 import com.ctimer2.util.ScoreBackup
@@ -34,7 +35,7 @@ import kotlinx.coroutines.withContext
 enum class TimerState { IDLE, HOLDING, READY, RUNNING }
 
 /** 右侧内容区当前显示的功能页（切换式，同一时刻最多一个） */
-enum class AppPageKey { SUMMARY, FORMULA, SETTINGS, LEADERBOARD, USER }
+enum class AppPageKey { SUMMARY, SETTINGS, LEADERBOARD, USER }
 
 /** 卡片区展示的列表视图（总评已独立成页，见 summaryPageOpen） */
 enum class ListViewMode { BY_TIME, BY_SCORE }
@@ -112,14 +113,12 @@ class TimerViewModel(app: Application) : AndroidViewModel(app) {
     private fun switchPage(key: AppPageKey) {
         val wasOpen = when (key) {
             AppPageKey.SUMMARY -> summaryPageOpen
-            AppPageKey.FORMULA -> formulaPageOpen
             AppPageKey.SETTINGS -> settingsPageOpen
             AppPageKey.LEADERBOARD -> leaderboardPageOpen
             AppPageKey.USER -> userPageOpen
         }
         // 先全关：保证任何时候都只有一个页面，而不是层层叠加
         summaryPageOpen = false
-        formulaPageOpen = false
         settingsPageOpen = false
         leaderboardPageOpen = false
         userPageOpen = false
@@ -130,7 +129,6 @@ class TimerViewModel(app: Application) : AndroidViewModel(app) {
 
         when (key) {
             AppPageKey.SUMMARY -> summaryPageOpen = true
-            AppPageKey.FORMULA -> formulaPageOpen = true
             AppPageKey.SETTINGS -> settingsPageOpen = true
             AppPageKey.LEADERBOARD -> leaderboardPageOpen = true
             AppPageKey.USER -> userPageOpen = true
@@ -177,16 +175,6 @@ class TimerViewModel(app: Application) : AndroidViewModel(app) {
     /** 轮盘：回到更新的一条打乱 */
     fun scrambleNext() {
         if (scrambleIndex > 0) scrambleIndex -= 1
-    }
-
-    // ---- 公式速记独立页面 ----
-    var formulaPageOpen by mutableStateOf(false)
-        private set
-
-    fun toggleFormulaPage() = switchPage(AppPageKey.FORMULA)
-
-    fun closeFormulaPage() {
-        formulaPageOpen = false
     }
 
     // ---- 云端排行榜独立页面 ----
@@ -418,6 +406,15 @@ class TimerViewModel(app: Application) : AndroidViewModel(app) {
     var bgVersion by mutableStateOf(0)
         private set
 
+    // ---- 性能档位（默认中等：动效保留、玻璃呼吸关闭） ----
+    var perfMode by mutableStateOf(PerfMode.BALANCED)
+        private set
+
+    fun applyPerfMode(mode: PerfMode) {
+        perfMode = mode
+        viewModelScope.launch { dataStore.setPerfMode(mode.name) }
+    }
+
     // ---- 材质 ----
     var glassMode by mutableStateOf(GlassMode.SOLID)
         private set
@@ -445,10 +442,15 @@ class TimerViewModel(app: Application) : AndroidViewModel(app) {
 
     /** 供 CompositionLocal 用的材质样式 */
     val glassStyle: GlassStyle
-        get() = when (glassMode) {
-            GlassMode.FRIT -> GlassStyle(GlassMode.FRIT, glassBlur, 0.34f)
-            GlassMode.MICA -> GlassStyle(GlassMode.MICA, glassBlur * 0.35f, 0.50f)
-            GlassMode.SOLID -> GlassStyle(GlassMode.SOLID, 0f, 1f)
+        get() {
+            // 低性能档位直接用实色，彻底免掉取景与模糊
+            if (perfMode == PerfMode.LOW) return GlassStyle(GlassMode.SOLID, 0f, 1f)
+            val scale = if (perfMode == PerfMode.BALANCED) 0.7f else 1f
+            return when (glassMode) {
+                GlassMode.FRIT -> GlassStyle(GlassMode.FRIT, glassBlur * scale, 0.34f)
+                GlassMode.MICA -> GlassStyle(GlassMode.MICA, glassBlur * 0.35f * scale, 0.50f)
+                GlassMode.SOLID -> GlassStyle(GlassMode.SOLID, 0f, 1f)
+            }
         }
     var fontMode by mutableStateOf(AppFont.MONO)
         private set
@@ -634,6 +636,8 @@ class TimerViewModel(app: Application) : AndroidViewModel(app) {
             val gm = dataStore.glassMode().first()
             glassMode = GlassMode.entries.firstOrNull { it.name == gm } ?: GlassMode.SOLID
             glassBlur = dataStore.glassBlur().first() ?: 18f
+            val pm = dataStore.perfMode().first()
+            perfMode = PerfMode.entries.firstOrNull { it.name == pm } ?: PerfMode.BALANCED
             bgBlur = dataStore.bgBlur().first() ?: 0f
 
             // 恢复用户名（登录态）

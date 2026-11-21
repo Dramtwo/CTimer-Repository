@@ -43,6 +43,8 @@ import com.ctimer2.ui.theme.DragonCatBlue
 import com.ctimer2.ui.theme.GlassMode
 import com.ctimer2.ui.theme.LocalGlass
 import com.ctimer2.ui.theme.LocalGlassBackdrop
+import com.ctimer2.ui.theme.LocalPerfMode
+import com.ctimer2.ui.theme.PerfMode
 import kotlin.math.max
 import kotlin.math.roundToInt
 
@@ -76,6 +78,7 @@ fun FrostedGlass(
     content: @Composable BoxScope.() -> Unit
 ) {
     val glass = LocalGlass.current
+    val perf = LocalPerfMode.current
     val backdropState = LocalGlassBackdrop.current
     var pos by remember { mutableStateOf(IntOffset.Zero) }
     // 用根布局的真实像素尺寸换算，避免 dp 与像素比例不一致导致取景错位（割裂）
@@ -89,7 +92,8 @@ fun FrostedGlass(
     }
 
     // 呼吸高光：只在高亮且非实色时创建无限过渡；数值在 draw 阶段读取（渲染层，不触发重组）
-    val breath: State<Float> = if (highlighted && glass.mode != GlassMode.SOLID) {
+    // 只有「华丽」档才跑呼吸高光：中等/低档直接静态，省掉一个无限动画
+    val breath: State<Float> = if (highlighted && glass.mode != GlassMode.SOLID && perf == PerfMode.LUXE) {
         val transition = rememberInfiniteTransition(label = "glassBreath")
         transition.animateFloat(
             initialValue = 0.22f,
@@ -166,7 +170,7 @@ fun FrostedGlass(
     ) {
         // 预烘焙模糊背景：按窗口像素精确裁切对应区域（不会错位、不撑高卡片）
         val baked = backdropState?.image
-        if (backdrop && glass.mode != GlassMode.SOLID && baked != null) {
+        if (backdrop && glass.mode != GlassMode.SOLID && perf != PerfMode.LOW && baked != null) {
             Box(
                 modifier = Modifier
                     .matchParentSize()

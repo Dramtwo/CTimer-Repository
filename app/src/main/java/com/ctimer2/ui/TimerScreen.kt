@@ -84,7 +84,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /** 内容区的页面：正常计时界面 / 成绩总评 / 公式速记 / 设置 */
-private enum class AppPage { NORMAL, SUMMARY, FORMULA, SETTINGS, LEADERBOARD, USER }
+private enum class AppPage { NORMAL, SUMMARY, SETTINGS, LEADERBOARD, USER }
 
 /** 背景图 + 它对应的版本号；版本与当前 [TimerViewModel.bgVersion] 不符说明这张图已经过期 */
 private data class ReadyBackground(val version: Int, val bitmap: androidx.compose.ui.graphics.ImageBitmap?)
@@ -96,7 +96,6 @@ fun TimerScreen(vm: TimerViewModel = viewModel()) {
     val drawerOpen = vm.drawerOpen
     val menuOpen = vm.actionMenuOpen
     val summaryOpen = vm.summaryPageOpen
-    val formulaOpen = vm.formulaPageOpen
     val settingsOpen = vm.settingsPageOpen
     val leaderboardOpen = vm.leaderboardPageOpen
     val userOpen = vm.userPageOpen
@@ -131,7 +130,6 @@ fun TimerScreen(vm: TimerViewModel = viewModel()) {
         userOpen -> AppPage.USER
         settingsOpen -> AppPage.SETTINGS
         leaderboardOpen -> AppPage.LEADERBOARD
-        formulaOpen -> AppPage.FORMULA
         summaryOpen -> AppPage.SUMMARY
         else -> AppPage.NORMAL
     }
@@ -189,8 +187,8 @@ fun TimerScreen(vm: TimerViewModel = viewModel()) {
     ) {
         // 背景还没就绪：保持上一份结果，宁可暂时用旧图，也不烘焙出「默认背景」的错图
         if (!isBgReady) return@produceState
-        // 实色模式（默认）不需要背景糊图：直接放弃烘焙，省掉一次全屏模糊，滑动更稳
-        if (vm.glassMode == com.ctimer2.ui.theme.GlassMode.SOLID) {
+        // 实色模式（含性能档「低」）不需要背景糊图：直接放弃烘焙，省掉一次全屏模糊，滑动更稳
+        if (vm.glassStyle.mode == com.ctimer2.ui.theme.GlassMode.SOLID) {
             value = null
             return@produceState
         }
@@ -206,12 +204,11 @@ fun TimerScreen(vm: TimerViewModel = viewModel()) {
         )
     }
 
-    BackHandler(enabled = drawerOpen || menuOpen || summaryOpen || formulaOpen || settingsOpen || leaderboardOpen || userOpen) {
+    BackHandler(enabled = drawerOpen || menuOpen || summaryOpen || settingsOpen || leaderboardOpen || userOpen) {
         when {
             userOpen -> vm.closeUserPage()
             settingsOpen -> vm.closeSettingsPage()
             leaderboardOpen -> vm.closeLeaderboardPage()
-            formulaOpen -> vm.closeFormulaPage()
             summaryOpen -> vm.closeSummaryPage()
             menuOpen -> vm.closeActionMenu()
             else -> vm.closeDrawer()
@@ -269,7 +266,7 @@ fun TimerScreen(vm: TimerViewModel = viewModel()) {
                     // 只要不在主计时页（总评 / 公式 / 云端排行 / 设置 / 用户中心任一页开着），
                     // 或者抽屉 / 成绩悬浮菜单开着，就不响应整屏计时手势，避免在别的页面点按钮时误计时。
                     // 注意：这里必须直接读 vm 的状态（组合期局部变量在 pointerInput 闭包里会停留在旧值）。
-                    val onOtherPage = vm.summaryPageOpen || vm.formulaPageOpen ||
+                    val onOtherPage = vm.summaryPageOpen ||
                         vm.leaderboardPageOpen || vm.settingsPageOpen || vm.userPageOpen
                     if (onOtherPage || vm.drawerOpen || vm.actionMenuOpen) {
                         down.consume()
@@ -337,6 +334,7 @@ fun TimerScreen(vm: TimerViewModel = viewModel()) {
             LocalAppFontFamily provides vm.fontMode.fontFamily,
             LocalAppFontColor provides vm.fontPalette.color,
             LocalGlass provides vm.glassStyle,
+            com.ctimer2.ui.theme.LocalPerfMode provides vm.perfMode,
             LocalBackgroundSpec provides BackgroundSpec(customBitmap, vm.bgVersion),
             LocalGlassBackdrop provides glassBackdrop
         ) {
@@ -389,9 +387,19 @@ fun TimerScreen(vm: TimerViewModel = viewModel()) {
         AnimatedContent(
             targetState = page,
             transitionSpec = {
-                val slideSpec = tween<IntOffset>(400, easing = FastOutSlowInEasing)
-                val fadeSpec = tween<Float>(360, easing = FastOutSlowInEasing)
-                val scaleSpec = tween<Float>(400, easing = FastOutSlowInEasing)
+                // 性能档位决定切页动效强度：华丽=完整空间推近；中等=缩短；低=只淡入
+                val perf = vm.perfMode
+                val dur = when (perf) {
+                    com.ctimer2.ui.theme.PerfMode.LUXE -> 400
+                    com.ctimer2.ui.theme.PerfMode.BALANCED -> 260
+                    com.ctimer2.ui.theme.PerfMode.LOW -> 180
+                }
+                val slideSpec = tween<IntOffset>(dur, easing = FastOutSlowInEasing)
+                val fadeSpec = tween<Float>(dur - 40, easing = FastOutSlowInEasing)
+                val scaleSpec = tween<Float>(dur, easing = FastOutSlowInEasing)
+                if (perf == com.ctimer2.ui.theme.PerfMode.LOW) {
+                    fadeIn(fadeSpec) togetherWith fadeOut(fadeSpec)
+                } else {
                 // 新页面从右侧推近（滑入 + 淡入 + 0.94→1 放大），旧页面向左淡出并轻微缩小
                 (slideInHorizontally(animationSpec = slideSpec) { it / 2 } +
                     fadeIn(fadeSpec) +
@@ -409,6 +417,7 @@ fun TimerScreen(vm: TimerViewModel = viewModel()) {
                                 animationSpec = scaleSpec
                             )
                     )
+                }
             },
             modifier = Modifier
                 .fillMaxSize()
@@ -435,8 +444,6 @@ fun TimerScreen(vm: TimerViewModel = viewModel()) {
                         )
                     }
 
-                    AppPage.FORMULA -> FormulaPage(onBack = { vm.closeFormulaPage() })
-
                     AppPage.LEADERBOARD -> LeaderboardScreen(
                         defaultSession = vm.currentSessionName,
                         userName = vm.userName,
@@ -459,6 +466,7 @@ fun TimerScreen(vm: TimerViewModel = viewModel()) {
                         glassMode = vm.glassMode,
                         glassBlur = vm.glassBlur,
                         bgBlur = vm.bgBlur,
+                        perfMode = vm.perfMode,
                         hintMessage = vm.hintMessage,
                         onPickBackground = {
                             pickBackground.launch(
@@ -474,12 +482,14 @@ fun TimerScreen(vm: TimerViewModel = viewModel()) {
                         onSelectGlassMode = { vm.applyGlassMode(it) },
                         onGlassBlurChange = { vm.applyGlassBlur(it) },
                         onBgBlurChange = { vm.applyBgBlur(it) },
+                        onSelectPerfMode = { vm.applyPerfMode(it) },
                         onExport = {
                             scope.launch {
                                 exportScores.launch("ctimer2_scores.json")
                             }
                         },
                         onImport = { launchImport() },
+                        onResetCards = { vm.resetCardOffsets() },
                         onBack = { vm.closeSettingsPage() }
                     )
                 }
@@ -497,7 +507,6 @@ fun TimerScreen(vm: TimerViewModel = viewModel()) {
             DrawerSideBar(
                 onOpen = { vm.openDrawer() },
                 onOpenSummary = { vm.toggleSummaryPage() },
-                onOpenFormula = { vm.toggleFormulaPage() },
                 onOpenLeaderboard = { vm.toggleLeaderboardPage() },
                 onResetCards = { vm.resetCardOffsets() },
                 onImport = { launchImport() },
@@ -569,7 +578,6 @@ fun TimerScreen(vm: TimerViewModel = viewModel()) {
                 onSelect = { vm.selectSession(it) },
                 onSelectView = { vm.setViewMode(it) },
                 onOpenSummary = { vm.toggleSummaryPage() },
-                onOpenFormula = { vm.toggleFormulaPage() },
                 onOpenLeaderboard = { vm.toggleLeaderboardPage() },
                 onCreate = { vm.createSession(it) },
                 onRename = { id, name -> vm.renameSession(id, name) },

@@ -43,8 +43,11 @@ fun DraggableCard(
     val offsetY = remember { mutableFloatStateOf(initialOffset.second) }
     var dragging by remember { mutableStateOf(false) }
     // 「拿起来再放下」：拖动时放大到 1.05 并加深阴影，松手用弹簧瞬间弹回
+    // 低性能档位不做放大与阴影，减少合成层开销
+    val perf = com.ctimer2.ui.theme.LocalPerfMode.current
+    val lift = dragging && perf != com.ctimer2.ui.theme.PerfMode.LOW
     val scale by animateFloatAsState(
-        targetValue = if (dragging) 1.05f else 1f,
+        targetValue = if (lift) 1.05f else 1f,
         animationSpec = spring(
             dampingRatio = Spring.DampingRatioMediumBouncy,
             stiffness = Spring.StiffnessLow
@@ -52,7 +55,7 @@ fun DraggableCard(
         label = "cardScale"
     )
     val elevation by animateFloatAsState(
-        targetValue = if (dragging) 18f else 0f,
+        targetValue = if (lift) 18f else 0f,
         animationSpec = spring(
             dampingRatio = Spring.DampingRatioMediumBouncy,
             stiffness = Spring.StiffnessLow

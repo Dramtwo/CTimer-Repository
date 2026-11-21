@@ -35,7 +35,6 @@ import com.ctimer2.ui.theme.DragonCatBlue
 fun DrawerSideBar(
     onOpen: () -> Unit,
     onOpenSummary: () -> Unit,
-    onOpenFormula: () -> Unit,
     onOpenLeaderboard: () -> Unit,
     onResetCards: () -> Unit,
     onImport: () -> Unit,
@@ -50,12 +49,12 @@ fun DrawerSideBar(
         shape = RectangleShape,
         tintAlphaShift = 0.1f
     ) {
-        // 侧栏共 8 个图标（秒表 + 3 功能 + 重置/导入/设置 + 用户），
+        // 侧栏共 7 个图标（秒表 + 总评 / 云端 2 个功能 + 重置/导入/设置 + 用户），
         // 横屏矮屏按可用高度自动缩小格子，保证最底部的用户图标永远不会被挤出屏幕。
         BoxWithConstraints(Modifier.fillMaxSize()) {
             // 固定占用：上下 padding 16 + 秒表下方分隔 21 + 图标间隙 20
             val fixed = 16.dp + 21.dp + 20.dp
-            val perCell = (maxHeight - fixed) / 8
+            val perCell = (maxHeight - fixed) / 7
             val cell = perCell.coerceIn(26.dp, 44.dp)
             val gap = if (cell >= 38.dp) 4.dp else 2.dp
             val iconSize = if (cell >= 34.dp) 22.dp else 19.dp
@@ -77,7 +76,6 @@ fun DrawerSideBar(
 
                 IconCell(onClick = onOpenSummary, cell = cell, iconSize = iconSize) { IconSummary(iconSize = iconSize) }
                 Spacer(Modifier.height(gap))
-                IconCell(onClick = onOpenFormula, cell = cell, iconSize = iconSize) { IconFormula(iconSize = iconSize) }
                 Spacer(Modifier.height(gap))
                 IconCell(onClick = onOpenLeaderboard, cell = cell, iconSize = iconSize) { IconCloud(iconSize = iconSize) }
 

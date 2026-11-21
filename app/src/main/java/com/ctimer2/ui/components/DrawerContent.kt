@@ -28,7 +28,6 @@ fun DrawerContent(
     onSelect: (Long) -> Unit,
     onSelectView: (ListViewMode) -> Unit,
     onOpenSummary: () -> Unit,
-    onOpenFormula: () -> Unit,
     onOpenLeaderboard: () -> Unit,
     onCreate: (String) -> Unit,
     onRename: (Long, String) -> Unit,
@@ -73,16 +72,6 @@ fun DrawerContent(
         }
         Spacer(Modifier.height(4.dp))
         StaggerIn(index = 1, shown = shown) {
-            DrawerEntryItem(
-                title = "公式速记",
-                subtitle = "七步口诀与字母对照",
-                selected = false,
-                onClick = { onOpenFormula() },
-                icon = { IconFormula() }
-            )
-        }
-        Spacer(Modifier.height(4.dp))
-        StaggerIn(index = 2, shown = shown) {
             DrawerEntryItem(
                 title = "云端排行",
                 subtitle = "GitHub Issues 云端成绩",
