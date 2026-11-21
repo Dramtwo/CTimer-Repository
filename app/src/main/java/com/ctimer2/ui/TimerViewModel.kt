@@ -3,6 +3,7 @@ package com.ctimer2.ui
 import android.app.Application
 import android.os.SystemClock
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
@@ -14,6 +15,7 @@ import com.ctimer2.data.SessionEntity
 import com.ctimer2.data.SolveRecord
 import com.ctimer2.network.GitHubRepository
 import com.ctimer2.ui.components.ResultRow
+import com.ctimer2.ui.components.WheelSlot
 import com.ctimer2.ui.theme.DragonCatBlue
 import com.ctimer2.ui.theme.GlassMode
 import com.ctimer2.ui.theme.GlassStyle
@@ -147,11 +149,34 @@ class TimerViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     // ---- 打乱公式（csTimer 风格 random-move） ----
-    var scramble by mutableStateOf(Scramble.generate())
+    // 带历史，轮盘可以前后翻：下一条 = 更新的，上一条 = 更早的
+    private val scrambleHistory = mutableStateListOf(Scramble.generate())
+
+    /** 当前显示历史里的第几条，0 = 最新 */
+    var scrambleIndex by mutableStateOf(0)
         private set
 
+    /** 当前打乱公式（历史与索引都是 State，读取即参与重组） */
+    val scramble: String
+        get() = scrambleHistory.getOrNull(scrambleIndex) ?: scrambleHistory.firstOrNull() ?: ""
+
+    /** 历史里可翻的条数 */
+    val scrambleHistorySize: Int get() = scrambleHistory.size
+
     fun refreshScramble() {
-        scramble = Scramble.generate()
+        scrambleHistory.add(0, Scramble.generate())
+        while (scrambleHistory.size > 60) scrambleHistory.removeAt(scrambleHistory.lastIndex)
+        scrambleIndex = 0
+    }
+
+    /** 轮盘：往前翻到更早的一条打乱 */
+    fun scramblePrev() {
+        if (scrambleIndex < scrambleHistory.lastIndex) scrambleIndex += 1
+    }
+
+    /** 轮盘：回到更新的一条打乱 */
+    fun scrambleNext() {
+        if (scrambleIndex > 0) scrambleIndex -= 1
     }
 
     // ---- 公式速记独立页面 ----
@@ -288,21 +313,76 @@ class TimerViewModel(app: Application) : AndroidViewModel(app) {
     var listOffset by mutableStateOf(0f to 0f)
         private set
 
-    // ---- 悬浮菜单 ----
+    // ---- 悬浮菜单 / 轮盘 ----
+    /** 有浮层打开的语义标记（侧栏隐藏、返回键拦截、整屏手势屏蔽都用它） */
     var actionMenuOpen by mutableStateOf(false)
         private set
 
-    fun openActionMenu() {
+    /** 轮盘是否展开 */
+    var wheelOpen by mutableStateOf(false)
+        private set
+
+    /** 轮盘圆心 = 手指按下点（窗口像素） */
+    var wheelCenterX by mutableStateOf(0f)
+        private set
+    var wheelCenterY by mutableStateOf(0f)
+        private set
+
+    /** 当前高亮槽位，WheelSlot.CANCEL(-1) 表示在中心死区 */
+    var wheelSelected by mutableStateOf(WheelSlot.CANCEL)
+        private set
+
+    /** 在手指按下点展开轮盘 */
+    fun openWheel(x: Float, y: Float) {
         if (timerState == TimerState.RUNNING) return
-        if (drawerOpen || solves.isEmpty()) return
-        if (browseIndex == null) browseIndex = 0
+        if (drawerOpen) return
+        wheelCenterX = x
+        wheelCenterY = y
+        wheelSelected = WheelSlot.CANCEL
+        wheelOpen = true
         actionMenuOpen = true
+        if (browseIndex == null && solves.isNotEmpty()) browseIndex = 0
     }
 
-    fun closeActionMenu() {
+    /** 手指移动时更新高亮槽位 */
+    fun updateWheelSlot(slot: Int) {
+        if (wheelOpen && wheelSelected != slot) wheelSelected = slot
+    }
+
+    /** 松手：执行当前高亮项；停在中心死区则什么都不做（也不会误删） */
+    fun releaseWheel() {
+        if (!wheelOpen) return
+        val slot = wheelSelected
+        wheelOpen = false
+        wheelSelected = WheelSlot.CANCEL
+        actionMenuOpen = false
+        when (slot) {
+            WheelSlot.DELETE -> if (solves.isNotEmpty()) deleteCurrentSolve()
+            WheelSlot.PREV_SCORE -> if (solves.isNotEmpty()) browsePrev()
+            WheelSlot.NEXT_SCORE -> if (solves.isNotEmpty()) browseNext()
+            WheelSlot.NEXT_SCRAMBLE -> scrambleNext()
+            WheelSlot.PREV_SCRAMBLE -> scramblePrev()
+            else -> Unit
+        }
+        browseIndex = null
+    }
+
+    /** 取消轮盘（返回键 / 手指抬起前被打断） */
+    fun cancelWheel() {
+        wheelOpen = false
+        wheelSelected = WheelSlot.CANCEL
         actionMenuOpen = false
         browseIndex = null
     }
+
+    /** 兼容旧的打开入口：没有坐标时按屏幕中间展开（正常手势不会走这里） */
+    fun openActionMenu() {
+        if (timerState == TimerState.RUNNING) return
+        if (drawerOpen) return
+        openWheel(wheelCenterX.takeIf { it > 0f } ?: 0f, wheelCenterY.takeIf { it > 0f } ?: 0f)
+    }
+
+    fun closeActionMenu() = cancelWheel()
 
     // ---- 成就字幕 ----
     /** 非空时 Logo 卡片切换为滚动横幅；7 秒后自动清除 */

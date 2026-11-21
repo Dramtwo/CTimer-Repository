@@ -1,11 +1,14 @@
 package com.ctimer2.ui
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
@@ -33,6 +36,7 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -45,11 +49,15 @@ import com.ctimer2.ui.theme.DragonCatBlue
 import com.ctimer2.viewmodel.LeaderboardViewModel
 
 /**
- * 云端排行榜：数据来自 GitHub Issues（Dramtwo/CTimer-List）。
- * 整页毛玻璃，与其他页面同一材质。
+ * 云端排行榜。
  *
- * 每行右侧的垃圾桶 = 删除这条云端成绩：会真的把对应 Issue 从 GitHub 仓库里 DELETE 掉。
- * 删除前弹一次确认框（不可撤销），删除中该行转圈并禁用点击，删完立即从列表消失。
+ * 版式迭代说明：原来是一行一条的列表（每行 40dp 高、横向排满），信息密度低、
+ * 屏幕只能看到 7-8 条，且长条状不好看。改成**双列卡片**：
+ * 每张卡 78dp 高，左上角排名、中间成绩大字、底部「列表名 · 用户」、右上角删除按钮，
+ * 横屏一屏能看 10-12 条，卡片式也比长条更耐看。
+ *
+ * 动效：卡片增删用 LazyGrid 的 animateItem 平滑过渡；排名前三的染色会随名次
+ * 变化做颜色动画；删除时该位置显示转圈。
  */
 @Composable
 fun LeaderboardScreen(
@@ -63,10 +71,9 @@ fun LeaderboardScreen(
 
     var timeInput by remember { mutableStateOf("") }
     var sessionInput by remember { mutableStateOf(defaultSession) }
-    // 待确认删除的成绩；非 null 时弹确认框
     var pendingDelete by remember { mutableStateOf<RemoteScore?>(null) }
+    var userMenuOpen by remember { mutableStateOf(false) }
 
-    // 进入页面即拉全量成绩（用户筛选交给右上角下拉框）
     LaunchedEffect(Unit) {
         viewModel.refresh()
     }
@@ -80,19 +87,19 @@ fun LeaderboardScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(20.dp)
+                .padding(horizontal = 18.dp, vertical = 14.dp)
         ) {
             // ---- 标题栏 ----
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(
                     modifier = Modifier
-                        .size(40.dp)
+                        .size(38.dp)
                         .clip(RoundedCornerShape(10.dp))
                         .background(DragonCatBlue.CardSurface)
                         .clickable(onClick = onBack),
                     contentAlignment = Alignment.Center
                 ) {
-                    Canvas(Modifier.size(18.dp)) {
+                    Canvas(Modifier.size(17.dp)) {
                         val w = size.width
                         val h = size.height
                         val stroke = 2.dp.toPx()
@@ -110,9 +117,9 @@ fun LeaderboardScreen(
                         drawPath(head, DragonCatBlue.TextPrimary, style = Stroke(stroke))
                     }
                 }
-                Spacer(Modifier.width(14.dp))
-                Box(Modifier.size(22.dp)) { IconCloud() }
-                Spacer(Modifier.width(10.dp))
+                Spacer(Modifier.width(12.dp))
+                Box(Modifier.size(20.dp)) { IconCloud() }
+                Spacer(Modifier.width(9.dp))
                 Column {
                     Text(
                         "云端排行",
@@ -121,36 +128,34 @@ fun LeaderboardScreen(
                     )
                     Text(
                         text = buildString {
-                            append("GitHub Issues · Dramtwo/CTimer-List · ")
+                            append("Dramtwo/CTimer-List · ")
                             val sel = state.selectedUser
                             append(if (sel == null) "所有用户" else "仅看 $sel")
                             append(" · ${state.visibleScores.size} 条")
-                            if (!userName.isNullOrBlank() && sel == null) append("（上传身份 $userName）")
                         },
                         style = MaterialTheme.typography.labelSmall,
                         color = DragonCatBlue.TextSecondary
                     )
                 }
+
                 Spacer(Modifier.weight(1f))
 
-                // ---- 用户筛选下拉（右上角）：任意用户 / 所有用户 ----
-                var userMenuOpen by remember { mutableStateOf(false) }
+                // 用户筛选下拉
                 Box {
                     Button(
                         onClick = { userMenuOpen = true },
                         shape = RoundedCornerShape(10.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = DragonCatBlue.CardSurface
-                        ),
-                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp)
+                        colors = ButtonDefaults.buttonColors(containerColor = DragonCatBlue.CardSurface),
+                        contentPadding = PaddingValues(horizontal = 13.dp, vertical = 6.dp),
+                        modifier = Modifier.height(34.dp)
                     ) {
                         Text(
                             text = state.selectedUser ?: "所有用户",
                             color = DragonCatBlue.TextPrimary,
-                            fontSize = 13.sp,
+                            fontSize = 12.sp,
                             maxLines = 1
                         )
-                        Text("  ▾", color = DragonCatBlue.TextSecondary, fontSize = 12.sp)
+                        Text("  ▾", color = DragonCatBlue.TextSecondary, fontSize = 11.sp)
                     }
                     DropdownMenu(
                         expanded = userMenuOpen,
@@ -185,80 +190,71 @@ fun LeaderboardScreen(
                     onClick = { viewModel.refresh() },
                     enabled = !state.loading,
                     shape = RoundedCornerShape(10.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = DragonCatBlue.PrimaryBlue
-                    )
+                    colors = ButtonDefaults.buttonColors(containerColor = DragonCatBlue.PrimaryBlue),
+                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp),
+                    modifier = Modifier.height(34.dp)
                 ) {
-                    Text("刷新", color = Color.White, fontSize = 13.sp)
+                    Text("刷新", color = Color.White, fontSize = 12.sp)
                 }
             }
 
-            Spacer(Modifier.height(14.dp))
+            Spacer(Modifier.height(10.dp))
 
-            // ---- 上传区 ----
+            // ---- 上传区（压成一行，尽量把空间留给列表） ----
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 OutlinedTextField(
                     value = timeInput,
                     onValueChange = { timeInput = it },
-                    label = { Text("成绩（秒）", fontSize = 12.sp) },
+                    label = { Text("成绩（秒）", fontSize = 11.sp) },
                     singleLine = true,
-                    modifier = Modifier.weight(0.32f)
+                    modifier = Modifier
+                        .weight(0.28f)
+                        .height(52.dp)
                 )
                 OutlinedTextField(
                     value = sessionInput,
                     onValueChange = { sessionInput = it },
-                    label = { Text("列表名", fontSize = 12.sp) },
+                    label = { Text("列表名", fontSize = 11.sp) },
                     singleLine = true,
-                    modifier = Modifier.weight(0.48f)
+                    modifier = Modifier
+                        .weight(0.44f)
+                        .height(52.dp)
                 )
                 Button(
                     onClick = { viewModel.upload(timeInput, sessionInput, userName) },
                     enabled = !state.uploading,
                     shape = RoundedCornerShape(10.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = DragonCatBlue.PrimaryBlue
-                    ),
-                    modifier = Modifier.height(52.dp)
+                    colors = ButtonDefaults.buttonColors(containerColor = DragonCatBlue.PrimaryBlue),
+                    modifier = Modifier
+                        .weight(0.2f)
+                        .height(52.dp)
                 ) {
                     Text(
                         if (state.uploading) "上传中…" else "上传",
                         color = Color.White,
-                        fontSize = 13.sp
+                        fontSize = 12.sp
                     )
                 }
             }
 
-            // ---- 状态提示 ----
             val hint = state.error ?: state.message
             if (hint != null) {
-                Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(6.dp))
                 Text(
                     text = hint,
-                    fontSize = 12.sp,
+                    fontSize = 11.sp,
                     color = if (state.error != null) DragonCatBlue.ResultWorse else DragonCatBlue.ResultBetter
                 )
             }
 
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(8.dp))
 
-            // ---- 列表 ----
-            Row(
-                Modifier.fillMaxWidth().padding(horizontal = 6.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text("#", fontSize = 11.sp, color = DragonCatBlue.TextSecondary, modifier = Modifier.width(34.dp))
-                Text("成绩", fontSize = 11.sp, color = DragonCatBlue.TextSecondary, modifier = Modifier.width(86.dp))
-                Text("列表", fontSize = 11.sp, color = DragonCatBlue.TextSecondary, modifier = Modifier.weight(1f))
-                Text("来自", fontSize = 11.sp, color = DragonCatBlue.TextSecondary, modifier = Modifier.width(70.dp))
-                Spacer(Modifier.width(30.dp))
-            }
-            Spacer(Modifier.height(6.dp))
-
-            Box(Modifier.weight(1f), contentAlignment = Alignment.TopStart) {
-                if (state.loading && state.scores.isEmpty()) {
+            // ---- 双列成绩卡片 ----
+            Box(Modifier.weight(1f)) {
+                if (state.loading && state.visibleScores.isEmpty()) {
                     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         CircularProgressIndicator(color = DragonCatBlue.PrimaryBlue)
                     }
@@ -268,21 +264,31 @@ fun LeaderboardScreen(
                             if (state.loading) "正在拉取…"
                             else if (state.selectedUser != null) "该用户暂无云端成绩"
                             else "云端还没有成绩，上传一条试试",
-                            fontSize = 13.sp,
+                            fontSize = 12.sp,
                             color = DragonCatBlue.TextSecondary
                         )
                     }
                 } else {
-                    LazyColumn(
-                        modifier = Modifier.fillMaxSize(),
-                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    LazyVerticalGrid(
+                        columns = GridCells.Fixed(2),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.fillMaxSize()
                     ) {
-                        itemsIndexed(state.visibleScores, key = { _, s -> s.key }) { index, score ->
-                            ScoreLeaderRow(
+                        itemsIndexed(
+                            items = state.visibleScores,
+                            key = { _, s -> s.key }
+                        ) { index, score ->
+                            ScoreGridCard(
                                 rank = index + 1,
                                 score = score,
                                 deleting = score.issueNumber in state.deleting,
-                                onDelete = { pendingDelete = score }
+                                onDelete = { pendingDelete = score },
+                                modifier = Modifier.animateItem(
+                                    fadeInSpec = tween(220),
+                                    placementSpec = tween(260),
+                                    fadeOutSpec = tween(160)
+                                )
                             )
                         }
                     }
@@ -300,8 +306,7 @@ fun LeaderboardScreen(
             text = {
                 Text(
                     "将从 GitHub 仓库永久删除 Issue #${target.issueNumber}\n" +
-                        "${target.displayTime} · ${target.session}\n\n" +
-                        "此操作不可撤销。",
+                        "${target.displayTime} · ${target.session}\n\n此操作不可撤销。",
                     fontSize = 13.sp,
                     color = DragonCatBlue.TextSecondary
                 )
@@ -325,84 +330,106 @@ fun LeaderboardScreen(
     }
 }
 
+/**
+ * 一条云端成绩的卡片：78dp 高，双列排布。
+ */
 @Composable
-private fun ScoreLeaderRow(
+private fun ScoreGridCard(
     rank: Int,
     score: RemoteScore,
     deleting: Boolean,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
     val podium = rank <= 3
-    Row(
-        modifier = Modifier
+    val bg by animateColorAsState(
+        targetValue = when (rank) {
+            1 -> DragonCatBlue.PrimaryBlue.copy(alpha = 0.20f)
+            2 -> DragonCatBlue.PrimaryBlue.copy(alpha = 0.14f)
+            3 -> DragonCatBlue.PrimaryBlue.copy(alpha = 0.09f)
+            else -> Color.White.copy(alpha = 0.46f)
+        },
+        animationSpec = tween(240),
+        label = "cardBg"
+    )
+
+    Box(
+        modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(10.dp))
-            .background(
-                if (podium) DragonCatBlue.PrimaryBlue.copy(alpha = 0.14f)
-                else Color.White.copy(alpha = 0.45f)
-            )
-            .padding(horizontal = 6.dp, vertical = 7.dp),
-        verticalAlignment = Alignment.CenterVertically
+            .height(78.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .background(bg)
+            .clickable(enabled = !deleting, onClick = onDelete)
     ) {
-        Box(Modifier.width(34.dp), contentAlignment = Alignment.CenterStart) {
-            Box(
-                modifier = Modifier
-                    .size(20.dp)
-                    .clip(CircleShape)
-                    .background(
-                        when (rank) {
-                            1 -> DragonCatBlue.PrimaryBlue
-                            2 -> DragonCatBlue.PrimaryBlueLight
-                            3 -> DragonCatBlue.BadgeGlassEnd
-                            else -> Color.Transparent
-                        }
-                    ),
-                contentAlignment = Alignment.Center
-            ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(start = 10.dp, top = 7.dp, end = 28.dp, bottom = 7.dp),
+            verticalArrangement = Arrangement.Center
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                // 排名徽章
+                Box(
+                    modifier = Modifier
+                        .size(17.dp)
+                        .clip(CircleShape)
+                        .background(
+                            if (podium) DragonCatBlue.PrimaryBlue else Color.White.copy(alpha = 0.55f)
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        "$rank",
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = if (podium) Color.White else DragonCatBlue.TextSecondary
+                    )
+                }
+                Spacer(Modifier.width(6.dp))
                 Text(
-                    text = "$rank",
-                    fontSize = if (podium) 11.sp else 12.sp,
-                    color = if (podium) Color.White else DragonCatBlue.TextSecondary,
-                    fontWeight = if (podium) FontWeight.Bold else FontWeight.Normal
+                    text = score.displayTime,
+                    fontSize = 19.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = DragonCatBlue.TextPrimary,
+                    maxLines = 1
                 )
             }
+            Spacer(Modifier.height(3.dp))
+            Text(
+                text = buildString {
+                    append(score.session)
+                    val author = score.author
+                    if (!author.isNullOrBlank()) {
+                        append(" · ")
+                        append(author)
+                    }
+                },
+                fontSize = 10.sp,
+                color = DragonCatBlue.TextSecondary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
         }
-        Text(
-            text = score.displayTime,
-            fontSize = 15.sp,
-            color = DragonCatBlue.TextPrimary,
-            fontWeight = if (podium) FontWeight.SemiBold else FontWeight.Normal,
-            modifier = Modifier.width(86.dp)
-        )
-        Text(
-            text = score.session,
-            fontSize = 12.sp,
-            color = DragonCatBlue.TextSecondary,
-            modifier = Modifier.weight(1f)
-        )
-        Text(
-            text = score.author ?: "—",
-            fontSize = 11.sp,
-            color = DragonCatBlue.TextSecondary,
-            maxLines = 1,
-            modifier = Modifier.width(70.dp)
-        )
-        // 删除按钮：删除中转圈并禁用点击
+
+        // 右上角删除按钮
         Box(
             modifier = Modifier
-                .size(30.dp)
-                .clip(RoundedCornerShape(8.dp))
+                .align(Alignment.TopEnd)
+                .padding(5.dp)
+                .size(22.dp)
+                .clip(CircleShape)
+                .background(Color.White.copy(alpha = 0.45f))
                 .clickable(enabled = !deleting, onClick = onDelete),
             contentAlignment = Alignment.Center
         ) {
             if (deleting) {
                 CircularProgressIndicator(
-                    modifier = Modifier.size(14.dp),
+                    modifier = Modifier.size(12.dp),
                     color = DragonCatBlue.PrimaryBlue,
-                    strokeWidth = 1.5.dp
+                    strokeWidth = 1.4.dp
                 )
             } else {
-                IconTrash()
+                IconTrash(iconSize = 12.dp)
             }
         }
     }

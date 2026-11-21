@@ -77,6 +77,9 @@ import kotlinx.coroutines.withContext
 /** 内容区的页面：正常计时界面 / 成绩总评 / 公式速记 / 设置 */
 private enum class AppPage { NORMAL, SUMMARY, FORMULA, SETTINGS, LEADERBOARD, USER }
 
+/** 背景图 + 它对应的版本号；版本与当前 [TimerViewModel.bgVersion] 不符说明这张图已经过期 */
+private data class ReadyBackground(val version: Int, val bitmap: androidx.compose.ui.graphics.ImageBitmap?)
+
 @Composable
 fun TimerScreen(vm: TimerViewModel = viewModel()) {
     val state = vm.timerState
@@ -138,16 +141,27 @@ fun TimerScreen(vm: TimerViewModel = viewModel()) {
     // 背景图只解码一次，供底图与各玻璃面板共用
     val appCtx = LocalContext.current
 
-    val customBitmap by produceState<ImageBitmap?>(initialValue = null, vm.hasCustomBg, vm.bgVersion) {
-        value = if (vm.hasCustomBg) {
-            withContext(Dispatchers.IO) {
+    // ---- 背景就绪状态 ----
+    // 关键修复：背景解码与玻璃烘焙原来是两条独立的异步链，烘焙会抢在解码完成前
+    // 读到旧图（或 null → 默认图），之后就再也不重算 ——「换成自定义背景，玻璃里还是默认背景」。
+    // 现在用「版本号 + 解码结果」打包成一个状态，只有版本对得上才算就绪。
+    var bgReady by remember { mutableStateOf<ReadyBackground?>(null) }
+    LaunchedEffect(vm.hasCustomBg, vm.bgVersion) {
+        val targetVersion = vm.bgVersion
+        val bmp = withContext(Dispatchers.IO) {
+            if (vm.hasCustomBg) {
                 runCatching { BackgroundStore.load(appCtx)?.asImageBitmap() }.getOrNull()
-            }
-        } else null
+            } else null
+        }
+        bgReady = ReadyBackground(targetVersion, bmp)
     }
+    val readyBg = bgReady?.takeIf { it.version == vm.bgVersion }
+    val isBgReady = readyBg != null
+    val customBitmap: ImageBitmap? = readyBg?.bitmap
 
-    // 预烘焙的玻璃底图：模糊只在这里算一次，面板只做平移裁切（滚动不掉帧）
+    // 预烘焙的玻璃底图：模糊只算一次，面板只做平移裁切（滚动不掉帧）
     val density = LocalDensity.current
+    val densityScale = density.density
     val cfg = LocalConfiguration.current
     var rootSize by remember { mutableStateOf(androidx.compose.ui.unit.IntSize.Zero) }
     val screenWpx = if (rootSize.width > 0) rootSize.width
@@ -156,19 +170,24 @@ fun TimerScreen(vm: TimerViewModel = viewModel()) {
         else with(density) { cfg.screenHeightDp.dp.roundToPx() }
     val glassBackdrop by produceState<GlassBackdrop?>(
         initialValue = null,
+        isBgReady,
+        customBitmap,
         vm.glassMode,
         vm.glassBlur,
-        vm.hasCustomBg,
-        vm.bgVersion,
+        vm.bgBlur,
         screenWpx,
         screenHpx
     ) {
+        // 背景还没就绪：保持上一份结果，宁可暂时用旧图，也不烘焙出「默认背景」的错图
+        if (!isBgReady) return@produceState
         value = buildGlassBackdrop(
             context = appCtx,
             custom = customBitmap,
             blurDp = if (vm.glassMode == com.ctimer2.ui.theme.GlassMode.SOLID) 0f else vm.glassBlur,
+            bgBlurDp = if (vm.glassMode == com.ctimer2.ui.theme.GlassMode.SOLID) 0f else vm.bgBlur,
             screenWpx = screenWpx,
             screenHpx = screenHpx,
+            density = densityScale,
             version = vm.bgVersion
         )
     }
@@ -260,6 +279,10 @@ fun TimerScreen(vm: TimerViewModel = viewModel()) {
                     var total = Offset.Zero
                     var dragged = false
                     val threshold = 30.dp.toPx()
+                    // 轮盘几何：外径与中心死区，和 RadialWheelMenu 保持同一套参数
+                    val wheelDiameterPx = with(density) { 268.dp.toPx() }
+                    val deadZonePx = wheelDiameterPx * 0.30f + 8.dp.toPx()
+                    val slotSweep = 72.0
                     while (true) {
                         val ev = awaitPointerEvent()
                         val ch = ev.changes.firstOrNull { it.id == down.id } ?: break
@@ -268,10 +291,24 @@ fun TimerScreen(vm: TimerViewModel = viewModel()) {
                         if (!dragged && total.getDistance() > threshold) {
                             dragged = true
                             vm.onCancel()
+                            // 在手指按下的位置弹出轮盘（CS-Timer 的手感）
+                            vm.openWheel(down.position.x, down.position.y)
                         }
-                        if (dragged) ch.consume()
+                        if (dragged) {
+                            val dx = ch.position.x - vm.wheelCenterX
+                            val dy = ch.position.y - vm.wheelCenterY
+                            val dist = kotlin.math.sqrt(dx * dx + dy * dy)
+                            if (dist < deadZonePx) {
+                                vm.updateWheelSlot(WheelSlot.CANCEL)
+                            } else {
+                                val deg = Math.toDegrees(kotlin.math.atan2(dy, dx).toDouble())
+                                val rel = ((deg + 90.0 + slotSweep / 2.0) % 360.0 + 360.0) % 360.0
+                                vm.updateWheelSlot((rel / slotSweep).toInt().coerceIn(0, 4))
+                            }
+                            ch.consume()
+                        }
                     }
-                    if (dragged) vm.openActionMenu() else vm.onPressEnd()
+                    if (dragged) vm.releaseWheel() else vm.onPressEnd()
                 }
             }
     ) {
@@ -423,27 +460,20 @@ fun TimerScreen(vm: TimerViewModel = viewModel()) {
             )
         }
 
-        // 悬浮菜单（拖动呼出）
+        // 轮盘菜单（在手指按下的位置弹出，松手执行高亮项，拖回中心则取消）
         AnimatedVisibility(
-            visible = menuOpen && !isRunning,
-            enter = fadeIn(),
-            exit = fadeOut(),
+            visible = vm.wheelOpen && !isRunning,
+            enter = fadeIn(tween(140)),
+            exit = fadeOut(tween(120)),
             modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .padding(bottom = 36.dp)
-                .zIndex(3f)
+                .fillMaxSize()
+                .zIndex(4f)
         ) {
-            val browsed = vm.browsedSolve()
-            val idx = vm.browseIndex ?: 0
-            SolveActionMenu(
-                displayMs = browsed?.timeMs ?: 0L,
-                positionText = if (vm.solves.isEmpty()) "" else "第 ${vm.solves.size - idx} / ${vm.solves.size} 条",
-                canPrev = idx < vm.solves.size - 1,
-                canNext = idx > 0,
-                onPrev = { vm.browsePrev() },
-                onNext = { vm.browseNext() },
-                onDelete = { vm.deleteCurrentSolve() },
-                onClose = { vm.closeActionMenu() }
+            RadialWheelMenu(
+                centerX = vm.wheelCenterX,
+                centerY = vm.wheelCenterY,
+                selected = vm.wheelSelected,
+                items = DefaultWheelItems
             )
         }
 
