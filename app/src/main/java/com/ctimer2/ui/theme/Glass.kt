@@ -14,7 +14,7 @@ enum class GlassMode(val label: String) {
 }
 
 data class GlassStyle(
-    val mode: GlassMode = GlassMode.MICA,
+    val mode: GlassMode = GlassMode.SOLID,
     /** 面板自身的模糊半径 */
     val blurDp: Float = 18f,
     /** 表面白色叠层不透明度 */

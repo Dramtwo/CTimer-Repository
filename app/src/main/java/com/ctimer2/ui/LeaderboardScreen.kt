@@ -1,6 +1,7 @@
 package com.ctimer2.ui
 
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -35,7 +36,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -332,6 +335,9 @@ fun LeaderboardScreen(
 
 /**
  * 一条云端成绩的卡片：78dp 高，双列排布。
+ *
+ * 排版说明：内容**整体居中**（原来左对齐又留了右侧删除位的 padding，看起来文字偏左）。
+ * 删除按钮是绝对定位在右上角的小圆，不参与文字排版，所以居中不会被打扰。
  */
 @Composable
 private fun ScoreGridCard(
@@ -341,41 +347,72 @@ private fun ScoreGridCard(
     onDelete: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val density = androidx.compose.ui.platform.LocalDensity.current
     val podium = rank <= 3
     val bg by animateColorAsState(
         targetValue = when (rank) {
-            1 -> DragonCatBlue.PrimaryBlue.copy(alpha = 0.20f)
-            2 -> DragonCatBlue.PrimaryBlue.copy(alpha = 0.14f)
-            3 -> DragonCatBlue.PrimaryBlue.copy(alpha = 0.09f)
-            else -> Color.White.copy(alpha = 0.46f)
+            1 -> DragonCatBlue.PrimaryBlue.copy(alpha = 0.22f)
+            2 -> DragonCatBlue.PrimaryBlue.copy(alpha = 0.15f)
+            3 -> DragonCatBlue.PrimaryBlue.copy(alpha = 0.10f)
+            else -> Color.White.copy(alpha = 0.50f)
         },
-        animationSpec = tween(240),
+        animationSpec = tween(260),
         label = "cardBg"
+    )
+    val badgeColor by animateColorAsState(
+        targetValue = if (podium) DragonCatBlue.PrimaryBlue else Color.White.copy(alpha = 0.62f),
+        animationSpec = tween(260),
+        label = "badgeColor"
+    )
+    // 入场：卡片依次上浮淡入（延迟按名次阶梯，最多吃 12 档，避免长列表末尾等太久）
+    var appeared by remember(score.key) { mutableStateOf(false) }
+    LaunchedEffect(score.key) {
+        kotlinx.coroutines.delay((rank.coerceAtMost(12) - 1) * 32L)
+        appeared = true
+    }
+    val enter by animateFloatAsState(
+        targetValue = if (appeared) 1f else 0f,
+        animationSpec = tween(240),
+        label = "cardEnter"
+    )
+    // 删除中：整卡轻微收缩，给一点「按下去」的反馈
+    val pressScale by animateFloatAsState(
+        targetValue = if (deleting) 0.955f else 1f,
+        animationSpec = tween(150),
+        label = "cardPress"
     )
 
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .height(78.dp)
-            .clip(RoundedCornerShape(12.dp))
+            .height(80.dp)
+            .graphicsLayer {
+                scaleX = pressScale
+                scaleY = pressScale
+                alpha = enter
+                translationY = with(density) { ((1f - enter) * 14.dp.toPx()) }
+            }
+            .clip(RoundedCornerShape(14.dp))
             .background(bg)
             .clickable(enabled = !deleting, onClick = onDelete)
     ) {
+        // 内容区：水平、垂直都居中；左右各留 12dp 让位给删除钮
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(start = 10.dp, top = 7.dp, end = 28.dp, bottom = 7.dp),
+                .padding(horizontal = 12.dp, vertical = 8.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                // 排名徽章
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center
+            ) {
                 Box(
                     modifier = Modifier
-                        .size(17.dp)
+                        .size(18.dp)
                         .clip(CircleShape)
-                        .background(
-                            if (podium) DragonCatBlue.PrimaryBlue else Color.White.copy(alpha = 0.55f)
-                        ),
+                        .background(badgeColor),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
@@ -385,16 +422,17 @@ private fun ScoreGridCard(
                         color = if (podium) Color.White else DragonCatBlue.TextSecondary
                     )
                 }
-                Spacer(Modifier.width(6.dp))
+                Spacer(Modifier.width(7.dp))
                 Text(
                     text = score.displayTime,
                     fontSize = 19.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = DragonCatBlue.TextPrimary,
+                    textAlign = TextAlign.Center,
                     maxLines = 1
                 )
             }
-            Spacer(Modifier.height(3.dp))
+            Spacer(Modifier.height(4.dp))
             Text(
                 text = buildString {
                     append(score.session)
@@ -406,30 +444,31 @@ private fun ScoreGridCard(
                 },
                 fontSize = 10.sp,
                 color = DragonCatBlue.TextSecondary,
+                textAlign = TextAlign.Center,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
         }
 
-        // 右上角删除按钮
+        // 右上角删除按钮（绝对定位，不占文字排版）
         Box(
             modifier = Modifier
                 .align(Alignment.TopEnd)
                 .padding(5.dp)
-                .size(22.dp)
+                .size(21.dp)
                 .clip(CircleShape)
-                .background(Color.White.copy(alpha = 0.45f))
+                .background(Color.White.copy(alpha = 0.52f))
                 .clickable(enabled = !deleting, onClick = onDelete),
             contentAlignment = Alignment.Center
         ) {
             if (deleting) {
                 CircularProgressIndicator(
-                    modifier = Modifier.size(12.dp),
+                    modifier = Modifier.size(11.dp),
                     color = DragonCatBlue.PrimaryBlue,
-                    strokeWidth = 1.4.dp
+                    strokeWidth = 1.3.dp
                 )
             } else {
-                IconTrash(iconSize = 12.dp)
+                IconTrash(iconSize = 11.dp)
             }
         }
     }

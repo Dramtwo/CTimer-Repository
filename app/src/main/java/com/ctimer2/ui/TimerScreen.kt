@@ -180,6 +180,11 @@ fun TimerScreen(vm: TimerViewModel = viewModel()) {
     ) {
         // 背景还没就绪：保持上一份结果，宁可暂时用旧图，也不烘焙出「默认背景」的错图
         if (!isBgReady) return@produceState
+        // 实色模式（默认）不需要背景糊图：直接放弃烘焙，省掉一次全屏模糊，滑动更稳
+        if (vm.glassMode == com.ctimer2.ui.theme.GlassMode.SOLID) {
+            value = null
+            return@produceState
+        }
         value = buildGlassBackdrop(
             context = appCtx,
             custom = customBitmap,
@@ -278,11 +283,13 @@ fun TimerScreen(vm: TimerViewModel = viewModel()) {
 
                     var total = Offset.Zero
                     var dragged = false
-                    val threshold = 30.dp.toPx()
-                    // 轮盘几何：外径与中心死区，和 RadialWheelMenu 保持同一套参数
-                    val wheelDiameterPx = with(density) { 268.dp.toPx() }
-                    val deadZonePx = wheelDiameterPx * 0.30f + 8.dp.toPx()
-                    val slotSweep = 72.0
+                    // 触发阈值放小，轮盘几乎是「一划就出来」，更跟手
+                    val threshold = 16.dp.toPx()
+                    // 轮盘几何全部取自 WheelGeometry，和渲染端共用一套数字
+                    val deadZonePx = with(density) {
+                        WheelGeometry.CenterSize.toPx() / 2f + WheelGeometry.DeadZonePadding.toPx()
+                    }
+                    val slotSweep = 360.0 / WheelSlot.COUNT
                     while (true) {
                         val ev = awaitPointerEvent()
                         val ch = ev.changes.firstOrNull { it.id == down.id } ?: break
@@ -301,9 +308,14 @@ fun TimerScreen(vm: TimerViewModel = viewModel()) {
                             if (dist < deadZonePx) {
                                 vm.updateWheelSlot(WheelSlot.CANCEL)
                             } else {
+                                // 按钮附近直接判定为最近的那个，命中半径外再退回按角度分扇区，
+                                // 保证「滑到哪个按钮就亮哪个」，手指稍偏也不会闪成隔壁
                                 val deg = Math.toDegrees(kotlin.math.atan2(dy, dx).toDouble())
                                 val rel = ((deg + 90.0 + slotSweep / 2.0) % 360.0 + 360.0) % 360.0
-                                vm.updateWheelSlot((rel / slotSweep).toInt().coerceIn(0, 4))
+                                // 按角度分扇区：每个按钮占 72°，滑向哪个方向就亮哪个
+                                vm.updateWheelSlot(
+                                    (rel / slotSweep).toInt().coerceIn(0, WheelSlot.COUNT - 1)
+                                )
                             }
                             ch.consume()
                         }

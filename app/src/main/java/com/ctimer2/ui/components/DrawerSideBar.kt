@@ -1,16 +1,27 @@
 package com.ctimer2.ui.components
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.ui.unit.Dp
 import androidx.compose.foundation.border
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
 import com.ctimer2.ui.ListViewMode
 import com.ctimer2.ui.theme.DragonCatBlue
@@ -101,18 +112,47 @@ private fun IconCell(
     highlighted: Boolean = false,
     content: @Composable () -> Unit
 ) {
+    // 按下时整格轻轻缩一下 + 底色变蓝，给一点「真的按到了」的反馈
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (pressed) 0.85f else 1f,
+        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
+        label = "cellScale"
+    )
+    val bg by animateColorAsState(
+        targetValue = when {
+            pressed -> DragonCatBlue.PrimaryBlue.copy(alpha = 0.34f)
+            highlighted -> DragonCatBlue.PrimaryBlue.copy(alpha = 0.16f)
+            else -> androidx.compose.ui.graphics.Color.Transparent
+        },
+        animationSpec = tween(150),
+        label = "cellBg"
+    )
+
     Box(
         modifier = Modifier
             .size(cell)
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            }
             .clip(RoundedCornerShape(10.dp))
+            .background(bg)
             .then(
                 if (highlighted) {
-                    Modifier
-                        .background(DragonCatBlue.PrimaryBlue.copy(alpha = 0.16f))
-                        .border(1.dp, DragonCatBlue.PrimaryBlue.copy(alpha = 0.45f), RoundedCornerShape(10.dp))
+                    Modifier.border(
+                        1.dp,
+                        DragonCatBlue.PrimaryBlue.copy(alpha = 0.45f),
+                        RoundedCornerShape(10.dp)
+                    )
                 } else Modifier
             )
-            .clickable(onClick = onClick),
+            .clickable(
+                interactionSource = interaction,
+                indication = ripple(color = DragonCatBlue.PrimaryBlue),
+                onClick = onClick
+            ),
         contentAlignment = Alignment.Center
     ) {
         Box(Modifier.size(iconSize), contentAlignment = Alignment.Center) { content() }

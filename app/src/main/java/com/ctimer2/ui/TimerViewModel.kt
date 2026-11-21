@@ -419,7 +419,7 @@ class TimerViewModel(app: Application) : AndroidViewModel(app) {
         private set
 
     // ---- 材质 ----
-    var glassMode by mutableStateOf(GlassMode.MICA)
+    var glassMode by mutableStateOf(GlassMode.SOLID)
         private set
     /** 面板模糊强度（dp），0 表示不模糊、纯半透明 */
     var glassBlur by mutableStateOf(18f)
@@ -632,7 +632,7 @@ class TimerViewModel(app: Application) : AndroidViewModel(app) {
 
             // 恢复材质设置
             val gm = dataStore.glassMode().first()
-            glassMode = GlassMode.entries.firstOrNull { it.name == gm } ?: GlassMode.MICA
+            glassMode = GlassMode.entries.firstOrNull { it.name == gm } ?: GlassMode.SOLID
             glassBlur = dataStore.glassBlur().first() ?: 18f
             bgBlur = dataStore.bgBlur().first() ?: 0f
 
