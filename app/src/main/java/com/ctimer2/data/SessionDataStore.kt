@@ -87,6 +87,7 @@ class SessionDataStore(private val context: Context) {
     private val KEY_GLASS_BLUR = floatPreferencesKey("glass_blur")
     private val KEY_BG_BLUR = floatPreferencesKey("bg_blur")
     private val KEY_USER_NAME = stringPreferencesKey("user_name")
+    private val KEY_PERF_MODE = stringPreferencesKey("perf_mode")
 
     /** 云端用户名（只要用户名，不需要密码） */
     fun userName(): Flow<String?> = context.dataStore.data.map { it[KEY_USER_NAME] }
@@ -102,6 +103,12 @@ class SessionDataStore(private val context: Context) {
     fun glassMode(): Flow<String?> = context.dataStore.data.map { it[KEY_GLASS_MODE] }
     fun glassBlur(): Flow<Float?> = context.dataStore.data.map { it[KEY_GLASS_BLUR] }
     fun bgBlur(): Flow<Float?> = context.dataStore.data.map { it[KEY_BG_BLUR] }
+
+    fun perfMode(): Flow<String?> = context.dataStore.data.map { it[KEY_PERF_MODE] }
+
+    suspend fun setPerfMode(name: String) {
+        context.dataStore.edit { it[KEY_PERF_MODE] = name }
+    }
 
     suspend fun setGlassMode(name: String) {
         context.dataStore.edit { it[KEY_GLASS_MODE] = name }
